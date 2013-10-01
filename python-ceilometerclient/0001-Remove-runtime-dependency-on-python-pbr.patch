@@ -1,0 +1,25 @@
+From d3d977d294386bc3e1072c740bcd20ff2573bfaa Mon Sep 17 00:00:00 2001
+From: Jakub Ruzicka <jruzicka@redhat.com>
+Date: Tue, 16 Jul 2013 18:09:30 +0200
+Subject: [PATCH] Remove runtime dependency on python-pbr.
+
+---
+ ceilometerclient/__init__.py | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/ceilometerclient/__init__.py b/ceilometerclient/__init__.py
+index d6efb69..b73e453 100644
+--- a/ceilometerclient/__init__.py
++++ b/ceilometerclient/__init__.py
+@@ -12,10 +12,4 @@
+ 
+ __all__ = ['__version__']
+ 
+-import pbr.version
+-
+-version_info = pbr.version.VersionInfo('python-ceilometerclient')
+-try:
+-    __version__ = version_info.version_string()
+-except AttributeError:
+-    __version__ = None
++__version__ = "REDHATCEILOMETERCLIENTVERSION"

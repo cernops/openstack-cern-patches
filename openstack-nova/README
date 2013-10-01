@@ -1,0 +1,84 @@
+Package Source:	  openstack-nova
+
+
+List of available patches
+-------------------------
+
+1000-cern-nova.patch
+
+This file contains the CERN patches for openstack nova.
+
+NOTE:
+Since Ibex release we keep one file with all patches.
+
+
+How to apply
+------------
+
+NOTE: This instructions are for the package openstack-nova.2012.2.2-X.ai6.X   
+
+1) Download and install the latest RPM for the package to use
+
+   yumdownloader --source openstack-nova
+
+
+2) Copy the patche into the SOURCES folder (~/rpmbuild/SOURCES)
+
+   cp 1000-cern-nova.patch ~/rpmbuild/SOURCES
+
+
+3) Add the version of the package to the Release field
+
+   ...
+   Name:             openstack-nova
+   Version:          2012.2.2
+   Release:          1%{?dist}.1
+   Summary:          OpenStack Compute (nova)
+   ...
+
+
+4) Add the patch at the end of the list of patches on the spec file in the SPECS folder (~/rpmbuild/SPECS)
+
+   ...
+   # This is EPEL specific and not upstream
+   Patch100:         openstack-nova-newdeps.patch
+
+   # CERN patch
+   Patch1000: 1000-cern-nova.patch
+   ...
+
+
+5) Add the patch in the %prep section after all the previous patches have been applied 
+
+   ...
+   # CERN patch
+   %patch1000 -p0
+   ...
+
+
+6) Add a relevant entry on the %changelog section at the beginning. By convention we append ai6.n
+
+   ...
+   %changelog
+   * Mon Sep  4 2012 Belmiro Moreira <belmiro.moreira@cern.ch> - 2012.1.1-15.2
+   - Syntax bugs
+
+   * Mon Sep  4 2012 Belmiro Moreira <belmiro.moreira@cern.ch> - 2012.1.1-15.1
+   - Add CERN network patch
+   - Add python-suds dependency
+   - Add CERN firewall patch
+
+   * Fri Aug 10 2012 Pádraig Brady <P@draigBrady.com> - 2012.1.1-15
+   - Fix package versions to ensure update dependencies are correct
+   - Fix CA cert permissions issue introduced in 2012.1.1-10
+   ...
+
+7) Build the source rpm from the spec file with the dist option set to ai6
+   For example:
+   rpmbuild -ba ~/rpmbuild/SPECS/openstack-openstack.spec --define 'dist .ai6'
+
+
+9) Submit the source rpm into koji
+   For example:
+   koji build ai6 ~/rpmbuild/SRPMS/openstack-openstack-2012.2.2-X.ai6.X.src.rpm
+

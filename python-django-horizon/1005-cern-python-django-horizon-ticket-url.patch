@@ -1,0 +1,40 @@
+--- a/openstack_dashboard/settings.py	2013-06-19 14:55:01.000000000 +0200
++++ b/openstack_dashboard/settings.py	2013-06-19 14:55:31.000000000 +0200
+@@ -65,6 +65,7 @@
+         'types': ['alert-success', 'alert-info']
+     },
+     'help_url': "https://information-technology.web.cern.ch/book/cern-private-cloud-user-guide",
++    'ticket_url': "https://cern.service-now.com/service-portal/report-ticket.do?name=request&fe=cloud-infrastructure&s=cloud%20infrastructure",
+     'exceptions': {'recoverable': exceptions.RECOVERABLE,
+                    'not_found': exceptions.NOT_FOUND,
+                    'unauthorized': exceptions.UNAUTHORIZED},
+--- a/openstack_dashboard/templates/_header.html	2013-06-19 14:48:51.000000000 +0200
++++ b/openstack_dashboard/templates/_header.html	2013-06-19 14:52:09.000000000 +0200
+@@ -5,6 +5,9 @@
+   {% if HORIZON_CONFIG.help_url %}
+   <a href="{{ HORIZON_CONFIG.help_url }}" target="_new">{% trans "Help" %}</a>
+   {% endif %}
++  {% if HORIZON_CONFIG.ticket_url %}
++  <a href="{{ HORIZON_CONFIG.ticket_url }}" target="_new">{% trans "Submit a ticket" %}</a>
++  {% endif %}
+   <a href="{% url logout %}">{% trans "Sign Out" %}</a>
+   {% include "horizon/common/_region_selector.html" %}
+ </div>
+--- a/openstack_dashboard/templates/500.html	2013-06-19 14:48:59.000000000 +0200
++++ b/openstack_dashboard/templates/500.html	2013-06-19 14:51:23.000000000 +0200
+@@ -65,13 +65,14 @@
+       <div id="text">
+         {% block text %}
+         <h2>{% trans "Something went wrong!" %}</h2>
+-        <p>{% trans "An unexpected error has occurred. Try refreshing the page. If that doesn't help, contact your local administrator." %}</p>
++        <p>{% trans "An unexpected error has occurred. Try refreshing the page. If that doesn't help, create a ticket in ServiceNow." %}</p>
+         {% endblock %}
+       </div>
+       <div id="links">
+         {% block links %}
+         <p><a href="/">{% trans "Home" %}</a></p>
+         <p><a href="{{ HORIZON_CONFIG.help_url }}">{% trans "Help" %}</a></p>
++        <p><a href="{{ HORIZON_CONFIG.ticket_url }}">{% trans "Submit a ticket" %}</a></p>
+         {% endblock %}
+       </div>
+     </div>

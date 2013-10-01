@@ -1,0 +1,1419 @@
+--- bin/nova-manage	2013-06-06 20:33:51.000000000 +0200
++++ bin/nova-manage	2013-06-20 21:23:40.000000000 +0200
+@@ -1124,6 +1124,85 @@
+         print fmt % ('-' * 3, '-' * 10, '-' * 6, '-' * 10, '-' * 15,
+                 '-' * 5, '-' * 10)
+ 
++
++class CernCommands(object):
++    """Class for CERN newtork integration."""
++
++    @args('--label', dest="label", metavar='<label>',
++            help='Label for network (ex: public)')
++    @args('--bridge', dest="bridge",
++            metavar='<bridge>',
++            help='VIFs on this network are connected to this bridge')
++    @args('--bridge_interface', dest="bridge_interface",
++            metavar='<bridge interface>',
++            help='the bridge is connected to this interface')
++    def network_create(self, label=None, conf=None, num_networks=None,
++               network_size=None, multi_host=None, vlan_start=None,
++               vpn_start=None, fixed_range_v6=None, gateway=None,
++               gateway_v6=None, bridge=None, bridge_interface=None,
++               dns1=None, dns2=None, project_id=None, priority=None,
++               uuid=None):
++        """Creates cern network"""
++
++        net_manager = importutils.import_object(CONF.network_manager)      
++        net_manager.create_networks(context.get_admin_context(),
++                                    label='CERN_NETWORK',
++                                    cidr='0.0.0.0/0',
++                                    multi_host=0,
++                                    num_networks=int('1'),
++                                    network_size=int('0'),
++                                    vlan_start=int('0'),
++                                    vpn_start=int('0'),
++                                    cidr_v6='',
++                                    gateway='0.0.0.0',
++                                    gateway_v6='',
++                                    bridge=bridge,
++                                    bridge_interface=bridge_interface,
++                                    dns1='',
++                                    dns2='',
++                                    project_id=project_id,
++                                    priority=0,
++                                    uuid=uuid)
++
++    def network_list(self):
++        """Updates cern network"""
++
++        ctxt = context.get_admin_context()
++
++        try:
++            fixed_ips = db.fixed_ip_get_all(ctxt)
++        except exception.NotFound as ex:
++            print "error: %s" % ex
++            sys.exit(2)
++
++        instances = db.instance_get_all(context.get_admin_context())
++        instances_by_id = {}
++        for instance in instances:
++            instances_by_id[instance['id']] = instance
++
++        print "%-20s\t%-20s\t%-20s\t%-20s\t%-20s" % (_('ip address'),
++                                                     _('mac address'),
++                                                     _('compute node'),
++                                                     _('network cluster name'),
++                                                     _('allocated'))
++
++        for fixed_ip in fixed_ips:
++            print "%-20s\t%-20s\t%-20s\t%-20s\t%-20s" % (fixed_ip['address'],
++                                                         fixed_ip['mac'],
++                                                         fixed_ip['host'],
++                                                         fixed_ip['netcluster'],
++                                                         fixed_ip['allocated'])
++
++
++    @args('--clustername', dest="clustername", metavar="<clustername>",
++      help='CERN network cluster name')
++    def network_update(self, clustername):
++        """Update cern network"""
++
++        net_manager = importutils.import_object(CONF.network_manager)
++        net_manager.update_network(context.get_admin_context(), clustername)
++
++
+ 
+ CATEGORIES = {
+     'account': AccountCommands,
+@@ -1142,6 +1221,7 @@
+     'shell': ShellCommands,
+     'vm': VmCommands,
+     'vpn': VpnCommands,
++    'cern': CernCommands,
+ }
+ 
+ 
+--- nova/api/openstack/compute/contrib/extended_availability_zone.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/api/openstack/compute/contrib/extended_availability_zone.py	2013-07-12 12:03:13.000000000 +0200
+@@ -40,12 +40,10 @@
+         host = str(instance.get('host'))
+         if not host:
+             return None
+-        cache_key = "azcache-%s" % host
+-        az = self.mc.get(cache_key)
+-        if not az:
+-            elevated = context.elevated()
+-            az = availability_zones.get_host_availability_zone(elevated, host)
+-            self.mc.set(cache_key, az, AZ_CACHE_SECONDS)
++
++        elevated = context.elevated()
++        az = availability_zones.get_host_availability_zone(elevated, host)
++
+         return az
+ 
+     def _extend_server(self, context, server, instance):
+--- nova/api/openstack/compute/servers.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/api/openstack/compute/servers.py	2013-07-16 11:20:42.000000000 +0200
+@@ -36,7 +36,10 @@
+ from nova.openstack.common import timeutils
+ from nova.openstack.common import uuidutils
+ from nova import utils
+-
++
++from nova import cernlandb
++import ldap
++
+ 
+ server_opts = [
+     cfg.BoolOpt('enable_instance_password',
+@@ -761,6 +764,68 @@
+         self._validate_server_name(name)
+         name = name.strip()
+ 
++
++        # check hostname size
++        if len(name) > 64:
++            msg = "Instance name is not a valid hostname"
++            raise exc.HTTPBadRequest(explanation=msg)
++
++        # check hostname
++        if name.lower() != (utils.sanitize_hostname(name)).lower():
++            msg = "Instance name is not a valid hostname"
++            raise exc.HTTPBadRequest(explanation=msg)
++
++        # check hostname in landb
++        try:
++            client = cernlandb.cern_landb_auth()
++            client.service.getDeviceInfo(name)
++        except:
++            pass
++        else:
++            msg = "Hostname already in use"
++            raise exc.HTTPBadRequest(explanation=msg)
++
++        # check DNS
++        try:
++            socket.gethostbyname(name)
++        except:
++            pass
++        else:
++            msg = "Hostname already in DNS"
++            raise exc.HTTPBadRequest(explanation=msg)
++
++        # check egroups
++        metadata = server_dict.get('metadata', {})
++        l = ldap.open("xldap.cern.ch")
++        l.protocol_version = ldap.VERSION3
++        baseDN = "OU=Workgroups,DC=cern,DC=ch"
++        searchScope = ldap.SCOPE_SUBTREE
++        retrieveAttributes = None
++        if 'landb-responsible' in metadata.keys() and metadata['landb-responsible'] != '' and metadata['landb-responsible'].__len__() < 70:
++            searchFilter = "cn="+metadata['landb-responsible']
++            try:
++                ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++                result_type, result_data = l.result(ldap_result_id, 0)
++                if (result_data == []):
++                    msg = "Cannot find egroup for landb-reponsible"
++                    raise exc.HTTPBadRequest(explanation=msg)
++            except Exception as e:
++                    msg = "Cannot find egroup for landb-reponsible"
++                    raise exc.HTTPBadRequest(explanation=msg)
++                
++        if 'landb-mainuser' in metadata.keys() and metadata['landb-mainuser'] != '' and metadata['landb-mainuser'].__len__() < 70:
++            searchFilter = "cn="+metadata['landb-mainuser']
++            try:
++                ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++                result_type, result_data = l.result(ldap_result_id, 0)
++                if (result_data == []):
++                    msg = "Cannot find egroup for landb-mainuser"
++                    raise exc.HTTPBadRequest(explanation=msg)
++            except Exception as e:
++                    msg = "Cannot find egroup for landb-mainuser"
++                    raise exc.HTTPBadRequest(explanation=msg)
++
++
+         image_uuid = self._image_from_req_data(body)
+ 
+         personality = server_dict.get('personality')
+--- nova/cernlandb.py	1970-01-01 01:00:00.000000000 +0100
++++ nova/cernlandb.py	2013-06-20 21:39:06.000000000 +0200
+@@ -0,0 +1,60 @@
++# vim: tabstop=4 shiftwidth=4 softtabstop=4
++
++# Copyright (c) 2011 X.commerce, a business unit of eBay Inc.
++# Copyright 2010 United States Government as represented by the
++# Administrator of the National Aeronautics and Space Administration.
++# All Rights Reserved.
++#
++#    Licensed under the Apache License, Version 2.0 (the "License"); you may
++#    not use this file except in compliance with the License. You may obtain
++#    a copy of the License at
++#
++#         http://www.apache.org/licenses/LICENSE-2.0
++#
++#    Unless required by applicable law or agreed to in writing, software
++#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++#    License for the specific language governing permissions and limitations
++#    under the License.
++
++
++import logging as pylog
++from nova.openstack.common import log as logging
++from nova import exception
++
++import time
++import suds.client
++from suds.xsd.doctor import ImportDoctor, Import
++from suds.client import Client
++
++LOG = logging.getLogger(__name__)
++pylog.getLogger('suds.client').setLevel(pylog.CRITICAL)
++
++
++def cern_landb_auth():
++    """Authenticates in landb"""
++    url = 'https://network.cern.ch/sc/soap/soap.fcgi?v=4&WSDL'
++    imp = Import('http://schemas.xmlsoap.org/soap/encoding/')
++    d = ImportDoctor(imp)
++    client = Client(url, doctor=d)
++
++    try:
++        file = open('/etc/sysconfig/nova_network', 'r')
++        (user, passwd) = (file.readline()).split(' ')
++        passwd = passwd.rstrip("\n")
++        file.close()
++    except Exception as e:
++        LOG.error(_("Cannot find landb credentials: %s" % str(e)))
++        raise exception.CernException()
++
++    try:
++        token = client.service.getAuthToken(user,passwd,'CERN')
++        myheader = dict(Auth={'token':token})
++        client.set_options(soapheaders=myheader)
++    except Exception as e:
++        LOG.error(_("Cannot authenticate in landb: %s" % str(e)))
++        raise exception.CernException()
++
++    return client
++
++
+--- nova/compute/api.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/compute/api.py	2013-07-12 11:22:48.000000000 +0200
+@@ -61,6 +61,11 @@
+ from nova import utils
+ from nova import volume
+ 
++
++from nova import cernlandb
++from random import choice
++
++
+ LOG = logging.getLogger(__name__)
+ 
+ compute_opts = [
+@@ -68,9 +73,13 @@
+                 default=False,
+                 help='Allow destination machine to match source for resize. '
+                      'Useful when testing in single-host environments.'),
+-    cfg.StrOpt('default_schedule_zone',
+-               default=None,
++
++    cfg.ListOpt('default_schedule_zones', 
++               # deprecated in Havanna release
++               deprecated_name='default_schedule_zone',
++               default=[],
+                help='availability zone to use when user doesn\'t specify one'),
++
+     cfg.ListOpt('non_inheritable_image_properties',
+                 default=['cache_in_nova',
+                          'bittorrent'],
+@@ -404,10 +413,10 @@
+         forced_host = None
+         if availability_zone and ':' in availability_zone:
+             availability_zone, forced_host = availability_zone.split(':')
+-
+-        if not availability_zone:
+-            availability_zone = CONF.default_schedule_zone
+-
++
++#        if not availability_zone:
++#            availability_zone = CONF.default_schedule_zone
++
+         return availability_zone, forced_host
+ 
+     @staticmethod
+@@ -835,8 +844,9 @@
+             instance['hostname'] = utils.sanitize_hostname(hostname)
+ 
+     def _default_display_name(self, instance_uuid):
+-        return "Server %s" % instance_uuid
+-
++
++        return "server-%s" % instance_uuid
++
+     def _populate_instance_for_create(self, base_options, image,
+             security_groups):
+         """Build the beginning of a new instance."""
+@@ -1877,6 +1887,33 @@
+                 host=migration_ref['source_compute'],
+                 reservations=reservations)
+ 
++
++        if CONF.network_manager != 'nova.network.manager.CernManager':
++            return
++
++        # get instance metadata
++        metadata = self.db.instance_metadata_get(context, instance['uuid'])
++
++        # migrate vm to other parent
++        try:
++            fixed_ips = self.db.fixed_ip_get_by_instance(context, instance['uuid'])
++            vm_ip = (fixed_ips[0])['address']
++            
++            client = cernlandb.cern_landb_auth()
++
++            device_name = (client.service.searchDevice({'IPAddress':vm_ip}))[0]
++
++            # check if parent is already the host
++            vm_parent = client.service.vmGetInfo(device_name)['VMParent']
++
++            if vm_parent.lower() != (instance['host'].lower()).replace('.cern.ch', ''):
++                # update vm info in landb
++                result = client.service.vmMigrate(device_name, (instance['host'].lower()).replace('.cern.ch', ''))
++                LOG.debug(_("Parent migration - from |%s| to |%s|" % (vm_parent.lower(), (instance['host'].lower()).replace('.cern.ch', ''))))
++        except Exception as e:
++            LOG.error(_("Cannot migrate VM in landb - %s" % str(e)))
++
++
+     @staticmethod
+     def _resize_quota_delta(context, new_instance_type,
+                             old_instance_type, sense, compare):
+@@ -2034,6 +2071,12 @@
+ 
+         filter_properties = {'ignore_hosts': []}
+ 
++
++        ipservice = self.db.cern_netcluster_get(context, instance['host'])
++        ignore_hosts = self.db.cern_ignore_hosts(context, ipservice['netcluster'])
++        filter_properties['ignore_hosts'].extend(ignore_hosts)
++
++
+         if not CONF.allow_resize_to_same_host:
+             filter_properties['ignore_hosts'].append(instance['host'])
+ 
+--- nova/compute/manager.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/compute/manager.py	2013-06-20 21:45:00.000000000 +0200
+@@ -77,6 +77,10 @@
+ from nova.virt import virtapi
+ from nova import volume
+ 
++
++import time
++import ldap
++
+ 
+ compute_opts = [
+     cfg.StrOpt('console_host',
+@@ -179,6 +183,10 @@
+ CONF.import_opt('enabled', 'nova.spice', group='spice')
+ CONF.import_opt('enable', 'nova.cells.opts', group='cells')
+ 
++
++CONF.import_opt('cern_landb', 'nova.network.manager')
++
++
+ LOG = logging.getLogger(__name__)
+ 
+ 
+@@ -773,6 +781,52 @@
+ 
+         return [_decode(f) for f in injected_files]
+ 
++
++    def _cern_ready(self, context, instance):
++            if instance['hostname'] == "server-"+str(instance['uuid']):
++                return
++
++            if not CONF.cern_landb:
++                return
++
++            metadata = self.conductor_api.instance_metadata_get(context, instance['uuid'])
++            if ('cern-services' in metadata.keys() and metadata['cern-services'].lower() != 'false') or ('cern-services' not in metadata.keys()):
++
++               for i in range(90):
++                  try:
++                     socket.gethostbyname(instance['hostname'])
++                     break
++                  except:
++                     LOG.info(_("Waiting for DNS - %s" % instance['uuid']))
++                     time.sleep(30)
++                     continue
++               else:
++                  LOG.error(_("DNS update failed - %s" % instance['uuid']))
++                  raise exception.CernException()
++
++               l = ldap.open("xldap.cern.ch")
++               l.protocol_version = ldap.VERSION3
++
++               baseDN = "DC=cern,DC=ch"
++               searchScope = ldap.SCOPE_SUBTREE
++               retrieveAttributes = None
++               searchFilter = "(&(name="+instance['hostname']+"))"
++
++               for i in range(60):
++                  ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++                  result_type, result_data = l.result(ldap_result_id, 0)
++                  if (result_data == []):
++                     LOG.info(_("Waiting for Active Directory - %s" % instance['uuid']))
++                     time.sleep(30)
++                     continue
++                  else:
++                     if result_type == ldap.RES_SEARCH_ENTRY:
++                        break
++               else:
++                   LOG.error(_("Active Directory update failed - %s" % instance['uuid']))
++                   raise exception.CernException()
++
++
+     def _run_instance(self, context, request_spec,
+                       filter_properties, requested_networks, injected_files,
+                       admin_password, is_first_time, node, instance):
+@@ -829,6 +883,9 @@
+ 
+                     network_info = self._allocate_network(context, instance,
+                             requested_networks, macs, security_groups)
++
++                    self._cern_ready(context, instance)
++
+ 
+                     self._instance_update(
+                             context, instance['uuid'],
+--- nova/conductor/api.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/conductor/api.py	2013-06-20 21:47:04.000000000 +0200
+@@ -70,6 +70,11 @@
+     def instance_get_by_uuid(self, context, instance_uuid):
+         return self._manager.instance_get_by_uuid(context, instance_uuid)
+ 
++
++    def instance_metadata_get(self, context, instance_uuid):
++        return self._manager.instance_metadata_get(context, instance_uuid)
++
++
+     def instance_destroy(self, context, instance):
+         return self._manager.instance_destroy(context, instance)
+ 
+@@ -401,6 +406,12 @@
+         return self.conductor_rpcapi.instance_get_by_uuid(context,
+                                                           instance_uuid)
+ 
++
++    def instance_metadata_get(self, context, instance_uuid):
++        return self.conductor_rpcapi.instance_metadata_get(context,
++                                                           instance_uuid)
++
++
+     def instance_get_all(self, context):
+         return self.conductor_rpcapi.instance_get_all(context)
+ 
+--- nova/conductor/manager.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/conductor/manager.py	2013-06-20 21:48:09.000000000 +0200
+@@ -106,6 +106,13 @@
+         return jsonutils.to_primitive(
+             self.db.instance_get_by_uuid(context, instance_uuid))
+ 
++
++    @rpc_common.client_exceptions(exception.InstanceNotFound)
++    def instance_metadata_get(self, context, instance_uuid):
++        return jsonutils.to_primitive(
++            self.db.instance_metadata_get(context, instance_uuid))
++
++
+     def instance_get_all(self, context):
+         return jsonutils.to_primitive(self.db.instance_get_all(context))
+ 
+--- nova/conductor/rpcapi.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/conductor/rpcapi.py	2013-06-20 21:49:01.000000000 +0200
+@@ -121,6 +121,13 @@
+                             instance_uuid=instance_uuid)
+         return self.call(context, msg, version='1.2')
+ 
++
++    def instance_metadata_get(self, context, instance_uuid):
++        msg = self.make_msg('instance_metadata_get',
++                            instance_uuid=instance_uuid)
++        return self.call(context, msg, version='1.2')
++
++
+     def migration_get(self, context, migration_id):
+         msg = self.make_msg('migration_get', migration_id=migration_id)
+         return self.call(context, msg, version='1.4')
+--- nova/db/api.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/db/api.py	2013-06-28 10:03:26.000000000 +0200
+@@ -1722,3 +1722,27 @@
+     """
+     return IMPL.archive_deleted_rows_for_table(context, tablename,
+                                                max_rows=max_rows)
++
++
++def cern_fixed_host_bulk_create(context, hosts):
++    """Create a lot of fixed hosts from the values dictionary."""
++    return IMPL.cern_fixed_host_bulk_create(context, hosts)
++
++def cern_netcluster_get(context, host):
++    """Get the host ipservice"""
++    return IMPL.cern_netcluster_get(context, host)
++
++def cern_mac_ip_get(context, ipservice, host=None):
++    """Get the host ipservice"""
++    return IMPL.cern_mac_ip_get(context, ipservice, host)
++
++def cern_ignore_hosts(context, ipservice):
++    return IMPL.cern_ignore_hosts(context, ipservice)
++
++def cern_fixed_ip_get_by_address(context, xip):
++    return IMPL.cern_fixed_ip_get_by_address(context, xip)
++
++def aggregate_metadata_get_all_by_key(context, key=None):
++    """Get all metadata values in all aggregates given a key."""
++    return IMPL.aggregate_metadata_get_all_by_key(context, key)
++
+--- nova/db/sqlalchemy/api.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/db/sqlalchemy/api.py	2013-06-28 10:05:58.000000000 +0200
+@@ -4888,3 +4888,81 @@
+         if rows_archived >= max_rows:
+             break
+     return rows_archived
++
++
++@require_context
++def cern_fixed_host_bulk_create(_context, hosts):
++    session = get_session()
++    with session.begin():
++        for host in hosts:
++            model = models.CernNetwork()
++            model.update(host)
++            session.add(model)
++
++@require_context
++def cern_netcluster_get(context, xhost):
++    session = get_session()
++    return session.query(models.CernNetwork).\
++                   filter_by(host=xhost).\
++                   first()
++
++@require_context
++def cern_mac_ip_get(context, xipservice, host):
++    session = get_session()
++    with session.begin():
++        fixed_ip_ref = session.query(models.FixedIp).\
++                               filter_by(reserved=False).\
++                               filter_by(deleted=False).\
++                               filter_by(allocated=False).\
++                               filter_by(netcluster=xipservice).\
++                               with_lockmode('update').\
++                               first()
++
++        if not fixed_ip_ref:
++            raise exception.NoMoreFixedIps()
++
++        if host:
++            fixed_ip_ref.host = host
++        session.add(fixed_ip_ref)
++    return fixed_ip_ref
++
++@require_context
++def cern_ignore_hosts(context, xipservice):
++    session = get_session()
++    rows = session.query(models.CernNetwork).\
++           filter(models.CernNetwork.netcluster != xipservice).\
++           all()
++
++    hosts = []
++    for r in rows:
++        hosts.append(r['host'].lower())
++
++    return hosts
++
++@require_context
++def cern_fixed_ip_get_by_address(context, xip):
++    session = get_session()
++    ips = session.query(models.FixedIp).\
++           filter(models.FixedIp.address == xip).\
++           first()
++
++    if not ips:
++        return None
++
++    return ips
++
++@require_admin_context
++def aggregate_metadata_get_all_by_key(context, key=None):
++    query = model_query(context, models.Aggregate).join(
++            "_metadata")
++    if key:
++        query = query.filter(models.AggregateMetadata.key == key)
++    rows = query.all()
++
++    metadata = collections.defaultdict(set)
++    for aggr in rows:
++        for kv in aggr._metadata:
++            if not key or kv['key'] == key:
++                metadata[kv['key']].add(kv['value'])
++    return metadata
++
+--- nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	1970-01-01 01:00:00.000000000 +0100
++++ nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	2013-06-20 21:53:46.000000000 +0200
+@@ -0,0 +1,42 @@
++from sqlalchemy import Boolean, Column, DateTime, Integer
++from sqlalchemy import MetaData, String, Table
++from nova.openstack.common import log as logging
++
++meta = MetaData()
++
++cern_network = Table('cern_network', meta,
++        Column('created_at', DateTime(timezone=False)),
++        Column('updated_at', DateTime(timezone=False)),
++        Column('deleted_at', DateTime(timezone=False)),
++        Column('deleted', Boolean(create_constraint=True, name=None)),
++        Column('id', Integer, primary_key=True),
++        Column('netcluster', String(255)),
++        Column('host', String(255)),
++        )
++
++# (fixed_ips)
++column_mac = Column('mac',  String(255))
++column_netcluster = Column('netcluster',  String(255))
++
++
++def upgrade(migrate_engine):
++    meta.bind = migrate_engine
++
++    # create CERN tables
++    for table in (cern_network, ):
++        try:
++            table.create()
++        except Exception:
++            pass
++
++    # alter fixed_ips table
++    table = Table('fixed_ips', meta, autoload=True)
++    try:
++        table.create_column(column_mac)
++    except Exception:
++        pass
++    
++    try:
++        table.create_column(column_netcluster)
++    except Exception:
++        pass
+\ No newline at end of file
+--- nova/db/sqlalchemy/models.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/db/sqlalchemy/models.py	2013-06-20 21:55:52.000000000 +0200
+@@ -661,7 +661,19 @@
+                                 'FixedIp.instance_uuid == Instance.uuid,'
+                                 'FixedIp.deleted == 0,'
+                                 'Instance.deleted == 0)')
+-
++
++    mac = Column(String(255), unique=True)
++    netcluster = Column(String(255))
++
++
++
++class CernNetwork(BASE, NovaBase):
++    """Represents an Ip Service configuration at CERN."""
++    __tablename__ = 'cern_network'
++    id = Column(Integer, primary_key=True)
++    netcluster = Column(String(255))
++    host = Column(String(255), unique=True)
++
+ 
+ class FloatingIp(BASE, NovaBase):
+     """Represents a floating ip that dynamically forwards to a fixed ip."""
+--- nova/exception.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/exception.py	2013-06-28 11:17:30.000000000 +0200
+@@ -1204,3 +1204,11 @@
+ 
+ class Base64Exception(NovaException):
+     message = _("Invalid Base 64 data for file %(path)s")
++    
++
++class CernException(NovaException):
++    message = _("Failed to process your request.")
++    
++class CernNoEgroup(NovaException):
++    message = _("Can't find egroup.")
++
+--- nova/network/linux_net.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/network/linux_net.py	2013-06-20 21:58:38.000000000 +0200
+@@ -379,6 +379,19 @@
+         self.ipv4['nat'].add_chain('float-snat')
+         self.ipv4['nat'].add_rule('snat', '-j $float-snat')
+ 
++
++        self.ipv4['filter'].add_rule('INPUT', '-s %s -j ACCEPT' %(CONF.metadata_host))
++
++        self.ipv4['filter'].add_rule('FORWARD', '-m pkttype --pkt-type broadcast -j ACCEPT')
++
++        self.ipv4['nat'].add_rule('PREROUTING',
++                                          '-s 0.0.0.0/0 -d 169.254.169.254/32 '
++                                          '-p tcp -m tcp --dport 80 -j DNAT '
++                                          '--to-destination %s:%s' %
++                                          (CONF.metadata_host,
++                                           CONF.metadata_port))
++
++
+     def defer_apply_on(self):
+         self.iptables_apply_deferred = True
+ 
+--- nova/network/manager.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/network/manager.py	2013-06-28 11:37:05.000000000 +0200
+@@ -73,6 +73,15 @@
+ from nova import servicegroup
+ from nova import utils
+ 
++
++from nova import cernlandb
++import nova.image.glance
++import time
++import string
++import random
++import ldap
++
++
+ LOG = logging.getLogger(__name__)
+ 
+ QUOTAS = quota.QUOTAS
+@@ -168,8 +177,19 @@
+                help="Indicates underlying L3 management library"),
+     ]
+ 
++
++cern_opts = [
++    cfg.BoolOpt('cern_landb',
++               default=True,
++               help='Update instances information in landb'),
++    ]
++
++
+ CONF = cfg.CONF
+ CONF.register_opts(network_opts)
++
++CONF.register_opts(cern_opts)
++
+ CONF.import_opt('use_ipv6', 'nova.netconf')
+ CONF.import_opt('my_ip', 'nova.netconf')
+ CONF.import_opt('network_topic', 'nova.network.rpcapi')
+@@ -1900,3 +1920,456 @@
+         """Number of reserved ips at the top of the range."""
+         parent_reserved = super(VlanManager, self)._top_reserved_ips
+         return parent_reserved + CONF.cnt_vpn_clients
++
++
++class CernManager(NetworkManager):
++    """CERN Network Manager."""
++
++    timeout_fixed_ips = False
++
++    required_create_args = ['bridge']
++
++    def _setup_network_on_host(self, context, network):
++        """Setup Network on this host."""
++        net = {}
++        net['injected'] = CONF.flat_injected
++        self.db.network_update(context, network['id'], net)
++
++    def _teardown_network_on_host(self, context, network):
++        """Tear down network on this host."""
++        pass
++
++    def get_floating_ip(self, context, id):
++        """Returns a floating IP as a dict."""
++        # NOTE(vish): This is no longer used but can't be removed until
++        #             we major version the network_rpcapi to 2.0.
++        return None
++
++    def get_floating_pools(self, context):
++        """Returns list of floating pools."""
++        # NOTE(maurosr) This method should be removed in future, replaced by
++        # get_floating_ip_pools. See bug #1091668
++        return {}
++
++    def get_floating_ip_pools(self, context):
++        """Returns list of floating ip pools."""
++        # NOTE(vish): This is no longer used but can't be removed until
++        #             we major version the network_rpcapi to 2.0.
++        return {}
++
++    def get_floating_ip_by_address(self, context, address):
++        """Returns a floating IP as a dict."""
++        # NOTE(vish): This is no longer used but can't be removed until
++        #             we major version the network_rpcapi to 2.0.
++        return None
++
++    def get_floating_ips_by_project(self, context):
++        """Returns the floating IPs allocated to a project."""
++        # NOTE(vish): This is no longer used but can't be removed until
++        #             we major version the network_rpcapi to 2.0.
++        return []
++
++    def get_floating_ips_by_fixed_address(self, context, fixed_address):
++        """Returns the floating IPs associated with a fixed_address."""
++        # NOTE(vish): This is no longer used but can't be removed until
++        #             we major version the network_rpcapi to 2.0.
++        return []
++
++    @network_api.wrap_check_policy
++    def allocate_floating_ip(self, context, project_id, pool):
++        """Gets a floating ip from the pool."""
++        return None
++
++    @network_api.wrap_check_policy
++    def deallocate_floating_ip(self, context, address,
++                               affect_auto_assigned):
++        """Returns a floating ip to the pool."""
++        return None
++
++    @network_api.wrap_check_policy
++    def associate_floating_ip(self, context, floating_address, fixed_address,
++                              affect_auto_assigned=False):
++        """Associates a floating ip with a fixed ip.
++
++        Makes sure everything makes sense then calls _associate_floating_ip,
++        rpc'ing to correct host if i'm not it.
++        """
++        return None
++
++    @network_api.wrap_check_policy
++    def disassociate_floating_ip(self, context, address,
++                                 affect_auto_assigned=False):
++        """Disassociates a floating ip from its fixed ip.
++
++        Makes sure everything makes sense then calls _disassociate_floating_ip,
++        rpc'ing to correct host if i'm not it.
++        """
++        return None
++
++    def migrate_instance_start(self, context, instance_uuid,
++                               floating_addresses,
++                               rxtx_factor=None, project_id=None,
++                               source=None, dest=None):
++        pass
++
++    def migrate_instance_finish(self, context, instance_uuid,
++                                floating_addresses, host=None,
++                                rxtx_factor=None, project_id=None,
++                                source=None, dest=None):
++        pass
++
++    def update_dns(self, context, network_ids):
++        """Called when fixed IP is allocated or deallocated."""
++        pass
++
++    def create_networks(self, context, label, cidr, multi_host, num_networks,
++                        network_size, cidr_v6, gateway, gateway_v6, bridge,
++                        bridge_interface, dns1=None, dns2=None, **kwargs):
++        """Create network."""
++
++        net = {}
++        net['bridge'] = bridge
++        net['bridge_interface'] = bridge_interface
++        net['multi_host'] = multi_host
++        net['dns1'] = dns1
++        net['dns2'] = dns2
++        net['label'] = label
++        net['cidr'] = cidr
++        net['gateway'] = gateway
++
++        network = self.db.network_create_safe(context, net)
++
++    def update_network(self, context, cluster_name):
++
++        client = cernlandb.cern_landb_auth()
++
++        try:
++            vms = client.service.vmClusterGetDevices(cluster_name)
++        except Exception as e:
++            LOG.error(_("Cannot get VMs from network cluster - %s - %s"),
++                        cluster_name, str(e))
++            raise exception.CernException()
++
++        try:
++            services = (client.service.vmClusterGetInfo(cluster_name)).Services
++        except Exception as e:
++            LOG.error(_("Cannot get network services for network cluster - "
++                        "%s - %s"), cluster_name, str(e))
++            raise exception.CernException()
++
++        primary_service = ""
++        for srv in services:
++            try:
++                if primary_service == "":
++                    primary_service = (client.service.getServiceInfo(srv)).Primary.__str__()
++                    continue
++                
++                if primary_service != (client.service.getServiceInfo(srv)).Primary.__str__():
++                    LOG.error(_("Network cluster has different primary services"))
++                    raise exception.CernException()
++            except Exception as e:
++                LOG.error(_("Cannot get network primary service for network "
++                            "cluster - %s - %s"), cluster_name, str(e))
++                raise exception.CernException()
++
++        try:
++            physical_devices = client.service.getDevicesFromService(primary_service)
++        except Exception as e:
++            LOG.error(_("Cannot get physical devices from primary service - "
++                        "%s - %s"), primary_service, str(e))
++            raise exception.CernException()
++
++        hosts = []
++        for host in physical_devices:
++            if self.db.cern_netcluster_get(context, host+'.CERN.CH') == None:
++                LOG.info(_("Adding host - %s" % str(host)))
++                hosts.append({'host':host+'.CERN.CH', 'netcluster':cluster_name})
++            else:
++                LOG.debug(_("Device already exists in DB - %s" % str(host)))
++
++        fixed_ips = []
++        for vm in vms:
++            try:
++                vm_info = client.service.getDeviceInfo(vm)
++            except Exception as e:
++                LOG.error(_("Cannot get VM netwok info - %s" % str(e)))
++                raise exception.CernException()
++
++            ip = vm_info.Interfaces[0].IPAddress.__str__()
++            mac = (vm_info.NetworkInterfaceCards[0].HardwareAddress.__str__()).replace('-', ':')
++
++            if self.db.cern_fixed_ip_get_by_address(context, ip) == None:
++                LOG.info(_("Adding ip - %s" % str(ip)))
++
++                fixed_ips.append({'network_id': '1',
++                                  'address': ip,
++                                  'reserved': False,
++                                  'mac': mac,
++                                  'netcluster': cluster_name})
++
++            else:
++                LOG.debug(_("IP already exists in DB - %s" % str(ip)))
++
++        self.db.cern_fixed_host_bulk_create(context, hosts)
++        self.db.fixed_ip_bulk_create(context, fixed_ips)
++
++    def allocate_for_instance(self, context, **kwargs):
++
++        instance_uuid = kwargs['instance_id']
++        host = kwargs['host']
++        project_id = kwargs['project_id']
++        rxtx_factor = kwargs['rxtx_factor']
++        requested_networks = kwargs.get('requested_networks')
++        vpn = kwargs['vpn']
++        admin_context = context.elevated()
++        LOG.debug(_("network allocations"), instance_uuid=instance_uuid,
++                  context=context)
++        networks = self._get_networks_for_instance(admin_context,
++                                        instance_uuid, project_id,
++                                        requested_networks=requested_networks)
++        LOG.debug(_('networks retrieved for instance: |%(networks)s|'),
++                  locals(), context=context, instance_uuid=instance_uuid)
++
++        vm_hostname = (self.db.instance_get_by_uuid(context, instance_uuid))['hostname']
++        vm_display = (self.db.instance_get_by_uuid(context, instance_uuid))['display_name']
++        if vm_hostname.lower() != vm_display.lower():
++            LOG.error(_("Hostname is not valid: %s - %s" % (vm_hostname.lower(), vm_display.lower())))
++            raise exception.CernException()
++        
++        self._allocate_address(admin_context, instance_uuid, host, networks,
++                               vm_hostname.lower())
++
++        return self.get_instance_nw_info(context, instance_uuid, rxtx_factor,
++                                         host)
++
++    def deallocate_fixed_ip(self, context, address, host, teardown=True):
++        """Deallocate ip and vif"""
++
++        self._deallocate_address(context, address, host, teardown)
++
++    def _allocate_address(self, admin_context, instance_uuid, host, networks, vm_name):
++        """Allocates instance address."""
++
++        ipservice =  self.db.cern_netcluster_get(admin_context, host)
++        cern_address = self.db.cern_mac_ip_get(admin_context, ipservice['netcluster'], host)
++        vm_ip = cern_address['address']
++        vm_mac = cern_address['mac']
++        network = networks[0]
++
++        LOG.info(_("Selected IP |%s| and MAC |%s| for instance |%s| on host |%s|" % (vm_ip, vm_mac, instance_uuid, host)))
++
++        vif = {'address': vm_mac,
++               'instance_uuid': instance_uuid,
++               'network_id': network['id'],
++               'uuid': str(str(uuid.uuid4()))}
++
++        self.db.virtual_interface_create(admin_context, vif)
++
++        get_vif = self.db.virtual_interface_get_by_instance_and_network
++        vifx = get_vif(admin_context, instance_uuid, network['id'])
++        values = {'allocated': True,
++                  'virtual_interface_id': vifx['id'],
++                  'instance_uuid': instance_uuid}
++        self.db.fixed_ip_update(admin_context, vm_ip, values)
++
++        if not CONF.cern_landb:
++            return
++
++        metadata = self.db.instance_metadata_get(admin_context, instance_uuid)
++        client = cernlandb.cern_landb_auth()
++        
++        try:
++            device_name = (client.service.searchDevice({'IPAddress':vm_ip}))[0]
++        except Exception as e:
++            LOG.error(_("Cannot find device name: %s" % str(e)))
++            raise exception.CernException()
++        
++        try:
++            vm_parent = client.service.vmGetInfo(device_name)['VMParent']
++
++            if vm_parent.lower() == (host.lower()).replace('.cern.ch', ''):
++                pass
++            else:
++                result = client.service.vmMigrate(device_name, (host.lower()).replace('.cern.ch', ''))
++                LOG.info(_("Parent migration - from |%s| to |%s|" % (vm_parent.lower(), (host.lower()).replace('.cern.ch', ''))))
++        except Exception as e:
++            LOG.error(_("Cannot migrate VM in landb - %s" % str(e)))
++        
++        try:
++            image_id = (self.db.instance_get_by_uuid(admin_context, instance_uuid))['image_ref']
++        except Exception as e:
++            LOG.error(_("Cannot get image id - %s" % str(e)))
++            raise exception.CernException()
++
++        image_service = nova.image.glance.get_default_image_service()
++        image_metadata = image_service.show(admin_context, image_id)
++
++        os = 'LINUX'
++        os_version = 'UNKNOWN'
++        if 'properties' in image_metadata.keys() and 'os' in image_metadata['properties'].keys():
++            if (image_metadata['properties']['os']).lower() == 'windows':
++                os = 'WINDOWS'
++                if 'os-version' in image_metadata['properties'].keys() and 'server' in (image_metadata['properties']['os-version']).lower():
++                    os_version = 'SERVER'
++            elif (image_metadata['properties']['os']).lower() == 'linux':
++                os = 'LINUX'
++
++        user_name = self.db.instance_get_by_uuid(admin_context, instance_uuid)["user_id"]
++        l = ldap.open("xldap.cern.ch")
++        l.protocol_version = ldap.VERSION3
++        baseDN = "OU=Users,OU=Organic Units,DC=cern,DC=ch"
++        searchScope = ldap.SCOPE_SUBTREE
++        retrieveAttributes = None
++        searchFilter = "cn="+user_name
++
++        try:
++            ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++            result_type, result_data = l.result(ldap_result_id, 0)
++            if (result_data == []):
++                raise exception.CernException()
++            if result_type == ldap.RES_SEARCH_ENTRY:
++                person_id = result_data[0][1]['employeeID'][0]
++        except Exception as e:
++            LOG.error(_("Cannot get ldap user information - %s" % str(e)))
++            raise exception.CernException()
++
++        try:
++            client.service.getDeviceInfo(vm_name)
++        except:
++            pass
++        else:
++            LOG.error(_("Hostname already exists in landb: %s" % vm_name))
++            raise exception.CernException()
++
++        vm_description = ''
++        if 'description' in metadata.keys() and metadata['description'] != '' and metadata['description'].__len__() < 255:
++            vm_description = metadata['description']
++
++        vm_responsible = {'PersonID':person_id}
++        vm_mainuser = {'PersonID':person_id}
++        
++        if 'landb-responsible' in metadata.keys() and metadata['landb-responsible'] != '' and metadata['landb-responsible'].__len__() < 70:
++            baseDN = "OU=Workgroups,DC=cern,DC=ch"
++            searchFilter = "cn="+metadata['landb-responsible']
++            try:
++                ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++                result_type, result_data = l.result(ldap_result_id, 0)
++                if (result_data == []):
++                    raise exception.CernNoEgroup()
++            except Exception as e:
++                LOG.error(_("Cannot find egroup - %s" % str(e)))
++                raise exception.CernNoEgroup()
++            vm_responsible = {'FirstName':'E-GROUP', 'Name':metadata['landb-responsible']}
++            
++        if 'landb-mainuser' in metadata.keys() and metadata['landb-mainuser'] != '' and metadata['landb-mainuser'].__len__() < 70:
++            baseDN = "OU=Workgroups,DC=cern,DC=ch"
++            searchFilter = "cn="+metadata['landb-mainuser']
++            try:
++                ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++                result_type, result_data = l.result(ldap_result_id, 0)
++                if (result_data == []):
++                    raise exception.CernNoEgroup()
++            except Exception as e:
++                LOG.error(_("Cannot find egroup - %s" % str(e)))
++                raise exception.CernNoEgroup()
++            vm_mainuser = {'FirstName':'E-GROUP', 'Name':metadata['landb-mainuser']}
++
++        try:
++            result = client.service.vmUpdate(device_name,
++                                                 {'DeviceName': vm_name,
++                                                  'Location': {'Floor':'0', 'Room':'0', 'Building':'0'},
++                                                  'Manufacturer':'KVM',
++                                                  'Model':'VIRTUAL MACHINE',
++                                                  'Description': vm_description,
++                                                  'Tag':'Openstack VM',
++                                                  'OperatingSystem': {'Name': os, 'Version': os_version},
++                                                  'ResponsiblePerson':vm_responsible,
++                                                  'UserPerson':vm_mainuser})
++        except Exception as e:
++            LOG.error(_("Cannot update landb: %s" % str(e)))
++            raise exception.CernException()
++
++    def _deallocate_address(self, context, address, host, teardown):
++
++        fixed_ip_ref = self.db.fixed_ip_get_by_address(context, address)
++        vif_id = fixed_ip_ref['virtual_interface_id']
++
++        instance = self.db.instance_get_by_uuid(
++                context.elevated(read_deleted='yes'),
++                fixed_ip_ref['instance_uuid'])
++
++        self._do_trigger_security_group_members_refresh_for_instance(
++            instance['uuid'])
++
++        if self._validate_instance_zone_for_dns_domain(context, instance):
++            for n in self.instance_dns_manager.get_entries_by_address(address,
++                                                     self.instance_dns_domain):
++                self.instance_dns_manager.delete_entry(n,
++                                                      self.instance_dns_domain)
++
++        self.db.fixed_ip_update(context, address,
++                                {'allocated': False,
++                                 'virtual_interface_id': None,
++                                 'host': None})
++
++        network = self._get_network_by_id(context, fixed_ip_ref['network_id'])
++        self._teardown_network_on_host(context, network)
++
++        self.db.fixed_ip_disassociate(context, address)
++
++        client = cernlandb.cern_landb_auth()
++
++        try:
++            device_name = (client.service.searchDevice({'IPAddress':address}))[0]
++        except Exception as e:
++            LOG.error(_("Cannot update Landb: %s" % str(e)))
++            return 
++
++        for i in range(5):
++            vm_temp = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(10))
++            vm_name = 'Z' + vm_temp
++            LOG.debug(_("Random instance name for Landb: %s" % vm_name))
++            try:
++                client.service.getDeviceInfo(vm_name)
++            except:
++                break
++            else:
++                LOG.debug(_("Hostname already exists: %s" % vm_name))
++                continue
++
++        try:
++            result = client.service.vmUpdate(device_name,
++                                             {'DeviceName': vm_name,
++                                              'Location': {'Floor':'0', 'Room':'0', 'Building':'0'},
++                                              'Manufacturer':'KVM',
++                                              'Model':'VIRTUAL MACHINE',
++                                              'Description': 'Not in use',
++                                              'Tag':'Openstack VM',
++                                              'OperatingSystem': {'Name': 'UNKNOWN', 'Version': 'UNKNOWN'},
++                                              'ResponsiblePerson':{'FirstName':'E-GROUP', 'Name':'AI-OPENSTACK-ADMIN', 'Department':'IT'}})
++        except Exception as e:
++            LOG.error(_("Cannot update landb: %s" % str(e)))
++            raise exception.CernException()
++
++def _ldap_query(self, cn, base):
++        l = ldap.open("xldap.cern.ch")
++        l.protocol_version = ldap.VERSION3
++        baseDN = base
++        searchScope = ldap.SCOPE_SUBTREE
++        retrieveAttributes = None
++        searchFilter = "cn="+cn
++
++        try:
++            ldap_result_id = l.search(baseDN, searchScope, searchFilter, retrieveAttributes)
++            result_type, result_data = l.result(ldap_result_id, 0)
++            if (result_data == []):
++                raise exception.CernException()
++            if result_type == ldap.RES_SEARCH_ENTRY:
++                person_id = result_data[0][1]['employeeID'][0]
++        except Exception as e:
++            LOG.error(_("Cannot get ldap user information - %s" % str(e)))
++            raise exception.CernException()
++
++
++
++
+--- nova/scheduler/driver.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/scheduler/driver.py	2013-06-20 22:03:54.000000000 +0200
+@@ -41,6 +41,10 @@
+ from nova.openstack.common import timeutils
+ from nova import servicegroup
+ 
++
++from nova import cernlandb
++
++
+ LOG = logging.getLogger(__name__)
+ 
+ scheduler_driver_opts = [
+@@ -221,6 +225,32 @@
+                 block_migration=block_migration,
+                 migrate_data=migrate_data)
+ 
++
++        if CONF.network_manager != 'nova.network.manager.CernManager':
++            return
++
++        # get instance metadata
++        metadata = db.instance_metadata_get(context, instance['uuid'])
++       
++        # migrate vm to other parent
++        try:
++            fixed_ips = db.fixed_ip_get_by_instance(context, instance['uuid'])
++            vm_ip = (fixed_ips[0])['address']
++            
++            client = cernlandb.cern_landb_auth()
++            
++            device_name = (client.service.searchDevice({'IPAddress':vm_ip}))[0]
++            
++            # check if parent is already the host
++            vm_parent = client.service.vmGetInfo(device_name)['VMParent']
++            
++            if vm_parent.lower() != (dest.lower()).replace('.cern.ch', ''): 
++                result = client.service.vmMigrate(device_name, (dest.lower()).replace('.cern.ch', ''))
++                LOG.debug(_("Parent migration - from |%s| to |%s|" % (vm_parent.lower(), (dest.lower()).replace('.cern.ch', ''))))
++        except Exception as e:
++            LOG.error(_("Cannot migrate VM in landb - %s" % str(e)))        
++
++
+     def _live_migration_src_check(self, context, instance_ref):
+         """Live migration check routine (for src host).
+ 
+@@ -288,6 +318,18 @@
+         if not self.servicegroup_api.service_is_up(dservice_ref):
+             raise exception.ComputeServiceUnavailable(host=dest)
+ 
++
++        if CONF.network_manager == 'nova.network.manager.CernManager':
++            # ipservice must be the same
++            src = instance_ref['host']
++            src_ipservice = db.cern_netcluster_get(context, src)
++            dest_ipservice = db.cern_netcluster_get(context, dest)
++        
++            if src_ipservice['ipservice'] != dest_ipservice['ipservice']:
++                LOG.error(_("Instance needs to be in the same network cluster."))
++                raise exception.CernException()
++
++
+         # Check memory requirements
+         self._assert_compute_node_has_enough_memory(context,
+                                                    instance_ref, dest)
+--- nova/scheduler/filters/project_to_aggregate_filter.py	1970-01-01 01:00:00.000000000 +0100
++++ nova/scheduler/filters/project_to_aggregate_filter.py	2013-06-28 10:08:26.000000000 +0200
+@@ -0,0 +1,56 @@
++# Copyright (c) 2011-2013 OpenStack Foundation
++# All Rights Reserved.
++#
++#    Licensed under the Apache License, Version 2.0 (the "License"); you may
++#    not use this file except in compliance with the License. You may obtain
++#    a copy of the License at
++#
++#         http://www.apache.org/licenses/LICENSE-2.0
++#
++#    Unless required by applicable law or agreed to in writing, software
++#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++#    License for the specific language governing permissions and limitations
++#    under the License.
++
++from nova import db
++from nova.openstack.common import log as logging
++from nova.scheduler import filters
++
++LOG = logging.getLogger(__name__)
++
++
++class ProjectsToAggregateFilter(filters.BaseHostFilter):
++    """Isolate projects in aggregates."""
++
++    def host_passes(self, host_state, filter_properties):
++        """If the metadata key "projects_to_aggregate" is defined in an
++        aggregate only instances from the specified projects can be created on
++        the aggregate hosts.
++        """
++        spec = filter_properties.get('request_spec', {})
++        props = spec.get('instance_properties', {})
++        project_id = props.get('project_id')
++        context = filter_properties['context'].elevated()
++        aggr_meta = db.aggregate_metadata_get_by_host(context,
++                                 host_state.host, key='projects_to_aggregate')
++        if aggr_meta != {}:
++            aggr_meta_ids = aggr_meta['projects_to_aggregate'].pop()
++            filter_projects_id = [x.strip() for x in aggr_meta_ids.split(',')]
++            if project_id not in filter_projects_id:
++                LOG.debug(_("%(host_state)s fails project id on "
++                    "aggregate"), {'host_state': host_state})
++                return False
++        else:
++            aggrs_meta = db.aggregate_metadata_get_all_by_key(context,
++                                                      'projects_to_aggregate')
++            aggrs_projects_id = []
++            for projects_id in aggrs_meta['projects_to_aggregate']:
++                for x in projects_id.split(','):
++                    aggrs_projects_id.append(x.strip())
++            if project_id in aggrs_projects_id:
++                LOG.debug(_("%(host_state)s fails project id on "
++                    "aggregate"), {'host_state': host_state})
++                return False
++        return True
++
+--- nova/virt/firewall.py	2013-06-06 20:33:51.000000000 +0200
++++ nova/virt/firewall.py	2013-07-16 14:29:46.000000000 +0200
+@@ -177,8 +177,16 @@
+ 
+         if self.instances.pop(instance['id'], None):
+             # NOTE(vish): use the passed info instead of the stored info
++#            self.network_infos.pop(instance['id'])
++#            self.remove_filters_for_instance(instance)
++
++
+             self.network_infos.pop(instance['id'])
++            self.network_infos[instance['id']] = network_info
+             self.remove_filters_for_instance(instance)
++            self.network_infos.pop(instance['id'])
++
++
+             self.iptables.apply()
+         else:
+             LOG.info(_('Attempted to unfilter instance which is not '
+@@ -250,6 +258,15 @@
+         self._add_filters('local', ipv4_rules, ipv6_rules)
+         self._add_filters(chain_name, inst_ipv4_rules, inst_ipv6_rules)
+ 
++
++        try:
++            ips_v4 = [ip['ip'] for (_n, mapping) in network_info for ip in mapping['ips']]
++            self.iptables.ipv4['filter'].add_rule('FORWARD', '-s %s -d 0.0.0.0/0 -j ACCEPT' % (ips_v4[0],))
++        except:
++            LOG.warn(_("Failed to add firewall rule. %s" % str(e)))
++            pass
++
++
+     def remove_filters_for_instance(self, instance):
+         chain_name = self._instance_chain_name(instance)
+ 
+@@ -257,6 +274,15 @@
+         if CONF.use_ipv6:
+             self.iptables.ipv6['filter'].remove_chain(chain_name)
+ 
++
++        network_info = self.network_infos[instance['id']]
++        ips_v4 = [ip['ip'] for (_n, mapping) in network_info for ip in mapping['ips']]
++        try:
++            self.iptables.ipv4['filter'].remove_rule('FORWARD', '-s %s -d 0.0.0.0/0 -j ACCEPT' % (ips_v4[0],))
++        except Exception as e:
++            LOG.warn(_("Cannot remove firewall rule. %s" % str(e)))
++
++
+     @staticmethod
+     def _security_group_chain_name(security_group_id):
+         return 'nova-sg-%s' % (security_group_id,)
+--- nova/virt/libvirt/firewall.py	2013-06-06 20:33:48.000000000 +0200
++++ nova/virt/libvirt/firewall.py	2013-06-20 22:09:02.000000000 +0200
+@@ -297,8 +297,15 @@
+         # Overriding base class method for applying nwfilter operation
+         if self.instances.pop(instance['id'], None):
+             # NOTE(vish): use the passed info instead of the stored info
+-            self.network_infos.pop(instance['id'])
++#            self.network_infos.pop(instance['id'])
++#            self.remove_filters_for_instance(instance)
++
++
++            self.network_infos[instance['id']] = network_info
+             self.remove_filters_for_instance(instance)
++            self.network_infos.pop(instance['id'])
++ 
++
+             self.iptables.apply()
+             self.nwfilter.unfilter_instance(instance, network_info)
+         else:

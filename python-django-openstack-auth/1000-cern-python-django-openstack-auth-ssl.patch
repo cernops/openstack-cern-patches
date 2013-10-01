@@ -1,0 +1,67 @@
+--- openstack_auth/tests/settings.py.orig	2013-02-05 14:52:57.000000000 +0100
++++ openstack_auth/tests/settings.py	2013-02-05 14:54:24.000000000 +0100
+@@ -20,6 +20,8 @@
+ 
+ OPENSTACK_KEYSTONE_URL = "http://localhost:5000/v2.0"
+ 
++OPENSTACK_CA_CERT = None
++
+ ROOT_URLCONF = 'openstack_auth.tests.urls'
+ 
+ LOGIN_REDIRECT_URL = '/'
+--- setup.py.orig	2013-02-05 15:04:11.000000000 +0100
++++ setup.py	2013-02-05 15:04:27.000000000 +0100
+@@ -45,8 +45,4 @@
+         'django >= 1.4',
+         'python-keystoneclient'
+     ],
+-    tests_require=[
+-        'mox',
+-    ],
+-    test_suite='openstack_auth.tests.run_tests.run'
+ )
+--- openstack_auth/backend.py.orig	2013-02-05 14:44:02.000000000 +0100
++++ openstack_auth/backend.py	2013-02-07 17:05:32.000000000 +0100
+@@ -3,6 +3,7 @@
+ import logging
+ 
+ from django.utils.translation import ugettext as _
++from django.conf import settings
+ 
+ from keystoneclient.v2_0 import client as keystone_client
+ from keystoneclient import exceptions as keystone_exceptions
+@@ -57,10 +58,12 @@
+         LOG.debug('Beginning user authentication for user "%s".' % username)
+ 
+         try:
++            cacert = settings.OPENSTACK_CA_CERT
+             client = keystone_client.Client(username=username,
+                                             password=password,
+                                             tenant_id=tenant,
+-                                            auth_url=auth_url)
++                                            auth_url=auth_url,
++                                            cacert=cacert)
+             unscoped_token_data = {"token": client.service_catalog.get_token()}
+             unscoped_token = Token(TokenManager(None),
+                                    unscoped_token_data,
+--- openstack_auth/user.py.orig	2013-02-07 17:06:24.000000000 +0100
++++ openstack_auth/user.py	2013-02-07 17:07:17.000000000 +0100
+@@ -1,4 +1,5 @@
+ from django.contrib.auth.models import AnonymousUser
++from django.conf import settings
+ 
+ from keystoneclient.v2_0 import client as keystone_client
+ from keystoneclient import exceptions as keystone_exceptions
+@@ -114,9 +115,11 @@
+             endpoint = self.endpoint
+             token = self.token
+             try:
++                cacert = settings.OPENSTACK_CA_CERT
+                 client = keystone_client.Client(username=self.username,
+                                                 auth_url=endpoint,
+-                                                token=token.id)
++                                                token=token.id,
++                                                cacert=cacert)
+                 authd = client.tenants.list()
+             except (keystone_exceptions.ClientException,
+                     keystone_exceptions.AuthorizationFailure):

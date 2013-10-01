@@ -1,0 +1,93 @@
+Package Source:	  python-django-horizon
+
+
+List of available patches
+-------------------------
+1000-cern-python-django-horizon-ssl.patch
+
+This file contains the patch to use a root certificate in the client side of
+the ssl configuration and also enable the --insecure option (self-signed certs)
+
+
+1001-cern-python-django-horizon-openrc.patch
+
+This file contains the new parameter for SSL Certificate Chain validation when
+generating from dashboard
+
+
+How to apply
+------------
+
+1) Download and install the latest RPM for the package to use
+
+   yumdownloader --source python-django-horizon
+
+
+2) Copy the patches into the SOURCES folder (~/rpmbuild/SOURCES)
+
+   cp 1000-cern-python-django-horizon-ssl.patch ~/rpmbuild/SOURCES
+   cp 1001-cern-python-django-horizon-openrc.patch ~/rpmbuild/SOURCES
+
+3) Add the version of the package to the Release field
+
+   ...
+   Name:       python-django-horizon
+   Version:    2012.1.1
+   Release:    2%{?dist}.1
+   Summary:    Django application for talking to Openstack
+   ...
+
+
+4) Add the patch at the end of the list of patches on the spec file in the SPECS folder (~/rpmbuild/SPECS)
+
+   ...
+   #
+   # patches_base=2012.1.1
+   #
+   Patch0001: 0001-disable-debug-logging.patch
+   Patch0002: 0002-default-database.patch
+   Patch0003: 0003-fix-removal-of-python-django-nose-dependency.patch
+   Patch4:    sphinx-sidebarwidth.patch
+   Patch5:    CVE-2012-3540-auth_forms.patch
+   
+   Patch1000: 1000-cern-python-django-horizon-ssl.patch
+   Patch1001: 1001-cern-python-django-horizon-openrc.patch
+   ...
+
+
+5) Add the patch in the %prep section after all the previous patches have been applied 
+
+   ...
+   %prep
+   %setup -q -n horizon-%{version}
+
+   %patch0001 -p1
+   %patch0002 -p1
+   %patch0003 -p1
+   %patch4 -p1
+   %patch5 -p1
+   %patch1000 -p0
+   %patch1001 -p0
+   ...
+  
+
+6) Add a relevant entry on the %changelog section at the beginning. By convention we append ai6.n
+
+   ...
+   %changelog
+   * Thu Sep 20 2012 Jose Castro Leon <jose.castro.leon@cern.ch> - 2012.1.1-2.ai6.1
+   - Include CERN SSL Patch
+
+   * Thu Aug 30 2012 Nuno Santos <nsantos@redhat.com> - 2012.1.1-2
+   - CVE-2012-3540 vulnerability in authentication mechanism
+   ...
+
+7) Build the source rpm from the spec file with the dist option set to ai6
+
+   rpmbuild -ba ~/rpmbuild/SPECS/python-django-horizon.spec --define 'dist .ai6'
+
+
+8) Submit the source rpm into koji
+
+   koji build ai6 ~/rpmbuild/SRPMS/python-django-horizon-2012.1.1-2.ai6.1.src.rpm
+

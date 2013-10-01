@@ -1,0 +1,11 @@
+--- a/openstack_dashboard/settings.py	2013-06-19 14:53:23.000000000 +0200
++++ b/openstack_dashboard/settings.py	2013-06-19 14:54:11.000000000 +0200
+@@ -64,7 +64,7 @@
+         'fade_duration': 1500,
+         'types': ['alert-success', 'alert-info']
+     },
+-    'help_url': "http://docs.openstack.org",
++    'help_url': "https://information-technology.web.cern.ch/book/cern-private-cloud-user-guide",
+     'exceptions': {'recoverable': exceptions.RECOVERABLE,
+                    'not_found': exceptions.NOT_FOUND,
+                    'unauthorized': exceptions.UNAUTHORIZED},

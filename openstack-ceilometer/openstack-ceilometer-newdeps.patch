@@ -1,0 +1,50 @@
+diff -Naur ceilometer-2013.1.g3.orig/ceilometer/__init__.py ceilometer-2013.1.g3/ceilometer/__init__.py
+--- ceilometer-2013.1.g3.orig/ceilometer/__init__.py	2013-04-08 09:54:04.545469160 +0000
++++ ceilometer-2013.1.g3/ceilometer/__init__.py	2013-04-08 10:01:12.306302227 +0000
+@@ -14,6 +14,28 @@
+ # under the License.
+ #
+ 
++import sys
++import pkg_resources
++
++# If there is a conflicting non egg module,
++# i.e. an older standard system module installed,
++# then replace it with this requirement
++def replace_dist(requirement):
++    try:
++        return pkg_resources.require(requirement)
++    except pkg_resources.VersionConflict:
++        e = sys.exc_info()[1]
++        dist=e.args[0]
++        req=e.args[1]
++        if dist.key == req.key and not dist.location.endswith('.egg'):
++            del pkg_resources.working_set.by_key[dist.key]
++            # We assume there is no need to adjust sys.path
++            # and the associated pkg_resources.working_set.entries
++            return pkg_resources.require(requirement)
++
++replace_dist("WebOb >= 1.2")
++replace_dist("SQLAlchemy >= 0.7.3")
++
+ import gettext
+ 
+ gettext.install('ceilometer', unicode=1)
+diff -Naur ceilometer-2013.1.g3.orig/ceilometer/storage/sqlalchemy/migration.py ceilometer-2013.1.g3/ceilometer/storage/sqlalchemy/migration.py
+--- ceilometer-2013.1.g3.orig/ceilometer/storage/sqlalchemy/migration.py	2013-04-08 09:54:04.608469135 +0000
++++ ceilometer-2013.1.g3/ceilometer/storage/sqlalchemy/migration.py	2013-04-08 10:06:21.515180041 +0000
+@@ -52,7 +52,13 @@
+ 
+ 
+ # NOTE(jkoelker) Delay importing migrate until we are patched
+-from migrate import exceptions as versioning_exceptions
++try:
++    # Try the more specific path first (migrate <= 0.6)
++    from migrate.versioning import exceptions as versioning_exceptions
++except ImportError:
++    # Use the newer path (migrate >= 0.7)
++    from migrate import exceptions as versioning_exceptions
++
+ from migrate.versioning import api as versioning_api
+ from migrate.versioning.repository import Repository
+ 

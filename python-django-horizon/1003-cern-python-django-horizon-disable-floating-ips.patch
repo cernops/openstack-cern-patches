@@ -1,0 +1,21 @@
+--- a/openstack_dashboard/dashboards/project/instances/tables.py	2013-06-19 14:45:10.000000000 +0200
++++ b/openstack_dashboard/dashboards/project/instances/tables.py	2013-06-19 14:45:31.000000000 +0200
+@@ -472,8 +472,7 @@
+         row_class = UpdateRow
+         table_actions = (LaunchLink, TerminateInstance)
+         row_actions = (ConfirmResize, RevertResize, CreateSnapshot,
+-                       SimpleAssociateIP, AssociateIP,
+-                       SimpleDisassociateIP, EditInstance,
++                       EditInstance,
+                        EditInstanceSecurityGroups, ConsoleLink, LogLink,
+                        TogglePause, ToggleSuspend, SoftRebootInstance,
+                        RebootInstance, TerminateInstance)
+--- a/openstack_dashboard/dashboards/project/access_and_security/tabs.py	2013-06-19 14:47:31.000000000 +0200
++++ b/openstack_dashboard/dashboards/project/access_and_security/tabs.py	2013-06-19 14:47:44.000000000 +0200
+@@ -122,5 +122,5 @@
+
+ class AccessAndSecurityTabs(tabs.TabGroup):
+     slug = "access_security_tabs"
+-    tabs = (SecurityGroupsTab, KeypairsTab, FloatingIPsTab, APIAccessTab)
++    tabs = (SecurityGroupsTab, KeypairsTab, APIAccessTab)
+     sticky = True

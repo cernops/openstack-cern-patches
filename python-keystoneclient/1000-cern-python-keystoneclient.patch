@@ -1,0 +1,19 @@
+--- keystoneclient/shell.py.orig	2013-02-05 13:50:56.000000000 +0100
++++ keystoneclient/shell.py	2013-02-05 13:51:06.000000000 +0100
+@@ -131,7 +131,7 @@
+ 
+         parser.add_argument('--os-cacert',
+                             metavar='<ca-certificate>',
+-                            default=env('OS_CA_CERT'),
++                            default=env('OS_CACERT'),
+                             help='Defaults to env[OS_CACERT]')
+         parser.add_argument('--os_cacert',
+                             help=argparse.SUPPRESS)
+--- keystoneclient/v2_0/client.py.orig	2013-02-07 17:10:49.000000000 +0100
++++ keystoneclient/v2_0/client.py	2013-02-07 17:12:16.000000000 +0100
+@@ -135,4 +135,4 @@
+                 endpoint_type='adminURL')
+         except:
+             # Unscoped tokens don't return a service catalog
+-            _logger.exception("unable to retrieve service catalog with token")
++            _logger.debug("unable to retrieve service catalog with token")

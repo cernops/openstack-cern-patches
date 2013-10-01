@@ -1,0 +1,143 @@
+diff -Naur python-ceilometerclient-1.0.1/ceilometerclient/client.py python-ceilometerclient-1.0.1-3/ceilometerclient/client.py
+--- python-ceilometerclient-1.0.1/ceilometerclient/client.py	2013-06-25 17:50:45.000000000 +0200
++++ python-ceilometerclient-1.0.1-3/ceilometerclient/client.py	2013-08-08 16:12:25.000000000 +0200
+@@ -23,13 +23,15 @@
+             * auth_url: endpoint to authenticate against
+             * insecure: allow insecure SSL (no cert verification)
+             * tenant_{name|id}: name or ID of tenant
++            * cacert: SSL certificate 
+     """
+     return ksclient.Client(username=kwargs.get('username'),
+                            password=kwargs.get('password'),
+                            tenant_id=kwargs.get('tenant_id'),
+                            tenant_name=kwargs.get('tenant_name'),
+                            auth_url=kwargs.get('auth_url'),
+-                           insecure=kwargs.get('insecure'))
++                           insecure=kwargs.get('insecure'),
++                           cacert=kwargs.get('cacert'))
+ 
+ 
+ def _get_endpoint(client, **kwargs):
+@@ -53,6 +55,7 @@
+             * os_auth_url: endpoint to authenticate against
+             * insecure: allow insecure SSL (no cert verification)
+             * os_tenant_{name|id}: name or ID of tenant
++            * os_cacert: CA certificate boundle
+     """
+     if kwargs.get('os_auth_token') and kwargs.get('ceilometer_url'):
+         token = kwargs.get('os_auth_token')
+@@ -71,6 +74,7 @@
+             'service_type': kwargs.get('os_service_type'),
+             'endpoint_type': kwargs.get('os_endpoint_type'),
+             'insecure': kwargs.get('insecure'),
++            'cacert': kwargs.get('os_cacert'),
+         }
+         _ksclient = _get_ksclient(**ks_kwargs)
+         token = kwargs.get('os_auth_token') or _ksclient.auth_token
+@@ -82,7 +86,7 @@
+         'token': token,
+         'insecure': kwargs.get('insecure'),
+         'timeout': kwargs.get('timeout'),
+-        'ca_file': kwargs.get('ca_file'),
++        'cacert': kwargs.get('os_cacert'),
+         'cert_file': kwargs.get('cert_file'),
+         'key_file': kwargs.get('key_file'),
+     }
+diff -Naur python-ceilometerclient-1.0.1/ceilometerclient/common/http.py python-ceilometerclient-1.0.1-3/ceilometerclient/common/http.py
+--- python-ceilometerclient-1.0.1/ceilometerclient/common/http.py	2013-06-25 17:50:45.000000000 +0200
++++ python-ceilometerclient-1.0.1-3/ceilometerclient/common/http.py	2013-08-08 16:45:04.000000000 +0200
+@@ -63,7 +63,7 @@
+ 
+         if parts.scheme == 'https':
+             _class = VerifiedHTTPSConnection
+-            _kwargs['ca_file'] = kwargs.get('ca_file', None)
++            _kwargs['cacert'] = kwargs.get('cacert', None)
+             _kwargs['cert_file'] = kwargs.get('cert_file', None)
+             _kwargs['key_file'] = kwargs.get('key_file', None)
+             _kwargs['insecure'] = kwargs.get('insecure', False)
+@@ -93,7 +93,7 @@
+         conn_params_fmt = [
+             ('key_file', '--key %s'),
+             ('cert_file', '--cert %s'),
+-            ('ca_file', '--cacert %s'),
++            ('cacert', '--cacert %s'),
+         ]
+         for (key, fmt) in conn_params_fmt:
+             value = self.connection_params[2].get(key)
+@@ -212,15 +212,15 @@
+     """
+ 
+     def __init__(self, host, port, key_file=None, cert_file=None,
+-                 ca_file=None, timeout=None, insecure=False):
++                 cacert=None, timeout=None, insecure=False):
+         httplib.HTTPSConnection.__init__(self, host, port, key_file=key_file,
+                                          cert_file=cert_file)
+         self.key_file = key_file
+         self.cert_file = cert_file
+-        if ca_file is not None:
+-            self.ca_file = ca_file
++        if cacert is not None:
++            self.cacert = cacert
+         else:
+-            self.ca_file = self.get_system_ca_file()
++            self.cacert = self.get_system_ca_file()
+         self.timeout = timeout
+         self.insecure = insecure
+ 
+@@ -242,7 +242,7 @@
+         if self.insecure is True:
+             kwargs = {'cert_reqs': ssl.CERT_NONE}
+         else:
+-            kwargs = {'cert_reqs': ssl.CERT_REQUIRED, 'ca_certs': self.ca_file}
++            kwargs = {'cert_reqs': ssl.CERT_REQUIRED, 'ca_certs': self.cacert}
+ 
+         if self.cert_file:
+             kwargs['certfile'] = self.cert_file
+diff -Naur python-ceilometerclient-1.0.1/ceilometerclient/shell.py python-ceilometerclient-1.0.1-3/ceilometerclient/shell.py
+--- python-ceilometerclient-1.0.1/ceilometerclient/shell.py	2013-06-25 17:50:45.000000000 +0200
++++ python-ceilometerclient-1.0.1-3/ceilometerclient/shell.py	2013-08-08 17:48:20.000000000 +0200
+@@ -76,12 +76,6 @@
+                             ' This option is not necessary if your key is '
+                             'prepended to your cert file.')
+ 
+-        parser.add_argument('--ca-file',
+-                            help='Path of CA SSL certificate(s) used to verify'
+-                            ' the remote server certificate. Without this '
+-                            'option ceilometer looks for the default system '
+-                            'CA certificates.')
+-
+         parser.add_argument('--timeout',
+                             default=600,
+                             help='Number of seconds to wait for a response')
+@@ -135,6 +129,19 @@
+         parser.add_argument('--os_auth_token',
+                             help=argparse.SUPPRESS)
+ 
++        parser.add_argument('--os-cacert',
++                            default=utils.env('OS_CACERT'),
++                            help='Specify a CA bundle file to use in '
++                                 'verifying a TLS (https) server certificate. '
++                                 'Defaults to env[OS_CACERT]')
++
++        parser.add_argument('--os_cacert',
++                            help=argparse.SUPPRESS)
++
++        parser.add_argument('--ca-file',
++                            dest='os_cacert',
++                            help='DEPRECATED! Use --os-cacert.')
++        
+         parser.add_argument('--ceilometer-url',
+                             default=utils.env('CEILOMETER_URL'),
+                             help='Defaults to env[CEILOMETER_URL]')
+@@ -144,9 +151,9 @@
+ 
+         parser.add_argument('--ceilometer-api-version',
+                             default=utils.env(
+-                            'CEILOMETER_API_VERSION', default='2'),
++                            'CEILOMETER_API_VERSION', default='1'),
+                             help='Defaults to env[CEILOMETER_API_VERSION] '
+-                            'or 2')
++                            'or 1')
+ 
+         parser.add_argument('--ceilometer_api_version',
+                             help=argparse.SUPPRESS)
