@@ -3,7 +3,7 @@
 @@ -65,6 +65,7 @@
          'types': ['alert-success', 'alert-info']
      },
-     'help_url': "https://information-technology.web.cern.ch/book/cern-private-cloud-user-guide",
+     'help_url': "http://docs.openstack.org",
 +    'ticket_url': "https://cern.service-now.com/service-portal/report-ticket.do?name=request&fe=cloud-infrastructure&s=cloud%20infrastructure",
      'exceptions': {'recoverable': exceptions.RECOVERABLE,
                     'not_found': exceptions.NOT_FOUND,

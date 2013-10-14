@@ -1,6 +1,6 @@
 Name:       python-django-horizon
 Version:    2013.1.3
-Release:    1%{?dist}.1
+Release:    1%{?dist}.4
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -26,9 +26,9 @@ Patch0003: 0003-Don-t-access-the-net-while-building-docs.patch
 Patch1001: 1001-cern-python-django-horizon-api-quotes.patch
 Patch1002: 1002-cern-python-django-horizon-openrc-cachain.patch
 Patch1003: 1003-cern-python-django-horizon-disable-floating-ips.patch
-Patch1004: 1004-cern-python-django-horizon-change-help-url.patch
-Patch1005: 1005-cern-python-django-horizon-ticket-url.patch
-Patch1006: 1006-cern-python-django-horizon-login-buttons.patch
+Patch1004: 1004-cern-python-django-horizon-ticket-url.patch
+Patch1005: 1005-cern-python-django-horizon-login-buttons.patch
+Patch1006: 1006-cern-python-django-horizon-disable-editandsecurity.patch
 
 
 %if 0%{?rhel}>6 || 0%{?fedora} > 18
@@ -98,7 +98,7 @@ BuildRequires: nodejs-less
 BuildRequires: python-netaddr
 BuildRequires: python-lockfile
 
-BuildRequires:   pytz
+BuildRequires:   pytz 
 %description -n openstack-dashboard
 Openstack Dashboard is a web user interface for Openstack. The package
 provides a reference implementation using the Django Horizon project,
@@ -220,7 +220,7 @@ cp -a horizon/static/* %{buildroot}%{_datadir}/openstack-dashboard/static
 
 # compress css, js etc.
 cd %{buildroot}%{_datadir}/openstack-dashboard
-%{__python} manage.py collectstatic --noinput --pythonpath=../../lib/python2.6/site-packages/
+%{__python} manage.py collectstatic --noinput --pythonpath=../../lib/python2.6/site-packages/ 
 %{__python} manage.py compress --pythonpath=../../lib/python2.6/site-packages/
 
 %files -f horizon.lang
@@ -267,7 +267,19 @@ cd %{buildroot}%{_datadir}/openstack-dashboard
 %config(noreplace) %attr(0640, root, apache) %{_sysconfdir}/openstack-dashboard/local_settings
 
 %files doc
-%doc html
+%doc html 
+
+%changelog
+* Wed Aug 28 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.4
+- Disable Edit Instance and Security Group actions
+
+%changelog
+* Wed Aug 28 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.3
+- Removed unnecessary patches
+
+%changelog
+* Thu Aug 22 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.2
+- Fixed layout on login page
 
 %changelog
 * Thu Aug 22 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.1
