@@ -51,6 +51,15 @@
  )
 --- a/openstack_dashboard/dashboards/project/access_and_security/api_access/views.py	2013-11-29 15:24:08.000000000 +0100
 +++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/views.py	2013-11-29 15:25:00.000000000 +0100
+@@ -28,7 +28,7 @@
+ from horizon import messages
+
+ from openstack_dashboard import api
+-
++from openstack_dashboard import settings
+
+ LOG = logging.getLogger(__name__)
+
 @@ -133,3 +133,35 @@
          LOG.exception("Exception in DownloadOpenRCForm.")
          messages.error(request, _('Error Downloading RC File: %s') % e)
@@ -93,6 +102,6 @@
  MEDIA_URL = '/media/'
  STATIC_ROOT = os.path.abspath(os.path.join(ROOT_PATH, '..', 'static'))
  STATIC_URL = '/static/'
-+CACHAIN_URL = '/static/cacert.pem'
++CACHAIN_URL = '/static/ca.pem'
 
  ROOT_URLCONF = 'openstack_dashboard.urls'
