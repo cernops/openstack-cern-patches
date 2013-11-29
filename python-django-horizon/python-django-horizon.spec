@@ -1,6 +1,6 @@
 Name:       python-django-horizon
-Version:    2013.1.3
-Release:    1%{?dist}.4
+Version:    2013.1.4
+Release:    1%{?dist}.1
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -15,21 +15,23 @@ Source2:    openstack-dashboard-httpd-2.4.conf
 # demo config for separate logging
 Source4:    openstack-dashboard-httpd-logging.conf
 
+# CERN sources
+Source1001: openstack.ps.template
+Source1002: windows.png
+
 #
-# patches_base=2013.1.3
+# patches_base=2013.1.4
 #
-Patch0001: 0001-Bump-stable-grizzly-next-version-to-2013.1.4.patch
-Patch0002: 0002-disable-debug-move-web-root.patch
-Patch0003: 0003-Don-t-access-the-net-while-building-docs.patch
+Patch0001: 0001-disable-debug-move-web-root.patch
+Patch0002: 0002-Don-t-access-the-net-while-building-docs.patch
 
 # CERN Patches
 Patch1001: 1001-cern-python-django-horizon-api-quotes.patch
-Patch1002: 1002-cern-python-django-horizon-openrc-cachain.patch
-Patch1003: 1003-cern-python-django-horizon-disable-floating-ips.patch
-Patch1004: 1004-cern-python-django-horizon-ticket-url.patch
-Patch1005: 1005-cern-python-django-horizon-login-buttons.patch
-Patch1006: 1006-cern-python-django-horizon-disable-editandsecurity.patch
-
+Patch1002: 1002-cern-python-django-horizon-disable-floating-ips.patch
+Patch1003: 1003-cern-python-django-horizon-extra-urls.patch
+Patch1004: 1004-cern-python-django-horizon-login-buttons.patch
+Patch1005: 1005-cern-python-django-horizon-disable-editandsecurity.patch
+Patch1006: 1006-cern-python-django-horizon-windows-powershell.patch
 
 %if 0%{?rhel}>6 || 0%{?fedora} > 18
 # grizzly requires python-django14
@@ -56,6 +58,8 @@ Requires:   python-quantumclient
 Requires:   python-cinderclient
 Requires:   python-swiftclient
 Requires:   pytz
+Requires:   python-netaddr
+Requires:   python-lockfile
 
 BuildRequires: python2-devel
 BuildRequires: python-setuptools
@@ -95,10 +99,11 @@ BuildRequires: python-django-compressor
 BuildRequires: python-django-appconf
 BuildRequires: nodejs
 BuildRequires: nodejs-less
+BuildRequires: pytz
 BuildRequires: python-netaddr
 BuildRequires: python-lockfile
 
-BuildRequires:   pytz 
+
 %description -n openstack-dashboard
 Openstack Dashboard is a web user interface for Openstack. The package
 provides a reference implementation using the Django Horizon project,
@@ -135,7 +140,6 @@ Documentation for the Django Horizon application for talking with Openstack
 
 %patch0001 -p1
 %patch0002 -p1
-%patch0003 -p1
 
 # CERN Patches
 %patch1001 -p1
@@ -144,7 +148,6 @@ Documentation for the Django Horizon application for talking with Openstack
 %patch1004 -p1
 %patch1005 -p1
 %patch1006 -p1
-
 # remove unnecessary .po files
 find . -name "django*.po" -exec rm -f '{}' \;
 
@@ -218,9 +221,13 @@ mkdir -p %{buildroot}%{_datadir}/openstack-dashboard/static
 cp -a openstack_dashboard/static/* %{buildroot}%{_datadir}/openstack-dashboard/static
 cp -a horizon/static/* %{buildroot}%{_datadir}/openstack-dashboard/static 
 
+#Copy windows powershell actions
+cp -a %{SOURCE1001} %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/dashboards/project/access_and_security/templates/access_and_security/api_access
+cp -a %{SOURCE1002} %{buildroot}%{_datadir}/openstack-dashboard/static/bootstrap/img
+
 # compress css, js etc.
 cd %{buildroot}%{_datadir}/openstack-dashboard
-%{__python} manage.py collectstatic --noinput --pythonpath=../../lib/python2.6/site-packages/ 
+%{__python} manage.py collectstatic --noinput --pythonpath=../../lib/python2.6/site-packages/
 %{__python} manage.py compress --pythonpath=../../lib/python2.6/site-packages/
 
 %files -f horizon.lang
@@ -270,25 +277,16 @@ cd %{buildroot}%{_datadir}/openstack-dashboard
 %doc html 
 
 %changelog
-* Wed Aug 28 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.4
-- Disable Edit Instance and Security Group actions
-
-%changelog
-* Wed Aug 28 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.3
-- Removed unnecessary patches
-
-%changelog
-* Thu Aug 22 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.2
-- Fixed layout on login page
-
-%changelog
-* Thu Aug 22 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.3-1.slc6.1
+* Fri Nov 29 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.4-1.slc6.1
 - fix for openrc and ec2 credentials download of projects with blanks
-- include CERN CA certificate chain in openrc
 - disable floating IP panel and actions
-- change help url to user guide
-- include access to service now
-- add buttons for subscribe and help in login panel
+- Add subscribe and ticket urls for external sites
+- Add buttons for subscribe and help in login panel
+- Disable Edit Instance and Security Group actions
+- Add windows powershell bundle download action
+
+* Thu Oct 24 2013 Matthias Runge <mrunge@redhat.com> - 2013.1.4-1
+- rebase to 2013.1.4
 
 * Mon Aug 12 2013 Matthias Runge <mrunge@redhat.com> - 2013.1.3-1
 - rebase to 2013.1.3

@@ -1,0 +1,98 @@
+--- a/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 14:49:55.000000000 +0100
++++ b/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 15:14:43.000000000 +0100
+@@ -598,6 +598,10 @@
+       .btn-icon(-91px, -19px);
+     }
+
++    a.btn-windows {
++      .btn-icon(5px, 6px, "/static/bootstrap/img/windows.png");
++    }
++
+     a.btn-upload {
+       .btn-icon(-283px, -92px);
+     }
+--- a/openstack_dashboard/dashboards/project/access_and_security/api_access/tables.py	2013-11-29 15:19:28.000000000 +0100
++++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/tables.py	2013-11-29 15:21:24.000000000 +0100
+@@ -49,6 +49,14 @@
+     url = "horizon:project:access_and_security:api_access:openrc"
+
+
++class DownloadPS(tables.LinkAction):
++    name = "download_ps"
++    verbose_name = _("Download PowerShell RC")
++    verbose_name_plural = _("Download PowerShell RC")
++    classes = ("btn-windows",)
++    url = "horizon:project:access_and_security:api_access:ps"
++
++
+ class EndpointsTable(tables.DataTable):
+     api_name = tables.Column('type',
+                              verbose_name=_("Service"),
+@@ -60,4 +68,4 @@
+         name = "endpoints"
+         verbose_name = _("API Endpoints")
+         multi_select = False
+-        table_actions = (DownloadOpenRC, DownloadEC2,)
++        table_actions = (DownloadOpenRC, DownloadEC2, DownloadPS)
+--- a/openstack_dashboard/dashboards/project/access_and_security/api_access/urls.py	2013-11-29 15:23:14.000000000 +0100
++++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/urls.py	2013-11-29 15:23:41.000000000 +0100
+@@ -20,10 +20,11 @@
+
+ from django.conf.urls.defaults import patterns, url
+
+-from .views import download_ec2_bundle, download_rc_file
++from .views import download_ec2_bundle, download_rc_file, download_ps_file
+
+
+ urlpatterns = patterns('',
+     url(r'^ec2/$', download_ec2_bundle, name='ec2'),
+     url(r'^openrc/$', download_rc_file, name='openrc'),
++    url(r'^ps/$', download_ps_file, name='ps'),
+ )
+--- a/openstack_dashboard/dashboards/project/access_and_security/api_access/views.py	2013-11-29 15:24:08.000000000 +0100
++++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/views.py	2013-11-29 15:25:00.000000000 +0100
+@@ -133,3 +133,35 @@
+         LOG.exception("Exception in DownloadOpenRCForm.")
+         messages.error(request, _('Error Downloading RC File: %s') % e)
+         return shortcuts.redirect(request.build_absolute_uri())
++
++def download_ps_file(request):
++    tenant_id = request.user.tenant_id
++    tenant_name = request.user.tenant_name
++
++    template = 'project/access_and_security/api_access/openstack.ps.template'
++
++    try:
++        keystone_url = api.base.url_for(request,
++                                        'identity',
++                                        endpoint_type='publicURL')
++
++        context = {'user': request.user,
++                   'auth_url': keystone_url,
++                   'tenant_id': tenant_id,
++                   'cachain_url': settings.CACHAIN_URL,
++                   'tenant_name': tenant_name}
++
++        response = shortcuts.render(request,
++                                    template,
++                                    context,
++                                    content_type="text/plain")
++        response['Content-Disposition'] = ('attachment; '
++                                           'filename=%s.ps1'
++                                           % tenant_name)
++        response['Content-Length'] = str(len(response.content))
++        return response
++
++    except Exception, e:
++        LOG.exception("Exception in DownloadPSForm.")
++        messages.error(request, _('Error Downloading PS File: %s') % e)
++        return shortcuts.redirect(request.build_absolute_uri())
+--- a/openstack_dashboard/settings.py	2013-11-29 15:28:03.000000000 +0100
++++ b/openstack_dashboard/settings.py	2013-11-29 15:28:12.000000000 +0100
+@@ -50,6 +50,7 @@
+ MEDIA_URL = '/media/'
+ STATIC_ROOT = os.path.abspath(os.path.join(ROOT_PATH, '..', 'static'))
+ STATIC_URL = '/static/'
++CACHAIN_URL = '/static/cacert.pem'
+
+ ROOT_URLCONF = 'openstack_dashboard.urls'
