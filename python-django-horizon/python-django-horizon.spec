@@ -1,5 +1,5 @@
 Name:       python-django-horizon
-Version:    2013.1.4
+Version:    2013.2.1
 Release:    1%{?dist}.1
 Summary:    Django application for talking to Openstack
 
@@ -8,37 +8,44 @@ Group:      Development/Libraries
 License:    ASL 2.0 and BSD
 URL:        http://horizon.openstack.org/
 BuildArch:  noarch
-Source0:     https://launchpad.net/horizon/grizzly/%{version}/+download/horizon-%{version}.tar.gz
+Source0:    https://launchpad.net/horizon/havana/%{version}/+download/horizon-%{version}.tar.gz
 Source1:    openstack-dashboard.conf
 Source2:    openstack-dashboard-httpd-2.4.conf
 
 # demo config for separate logging
 Source4:    openstack-dashboard-httpd-logging.conf
 
+# custom icons
+Source10:   rhfavicon.ico
+Source11:   rh-logo.png
+
 # CERN sources
 Source1001: openstack.ps.template
 Source1002: windows.png
 
 #
-# patches_base=2013.1.4
+# patches_base=2013.2.1
 #
-Patch0001: 0001-disable-debug-move-web-root.patch
-Patch0002: 0002-Don-t-access-the-net-while-building-docs.patch
+Patch0001: 0001-Don-t-access-the-net-while-building-docs.patch
+Patch0002: 0002-disable-debug-move-web-root.patch
+Patch0003: 0003-change-lockfile-location-to-tmp-and-also-add-localho.patch
+Patch0004: 0004-Add-a-customization-module-based-on-RHOS.patch
+Patch0005: 0005-move-RBAC-policy-files-and-checks-to-etc-openstack-d.patch
+Patch0006: 0006-move-SECRET_KEY-secret_key_store-to-tmp.patch
+Patch0007: 0007-fix-up-issues-with-customization.patch
+Patch0008: 0008-do-not-truncate-the-logo-related-rhbz-877138.patch
+Patch0009: 0009-move-SECRET_KEYSTORE-to-var-lib-openstack-dashboard.patch
 
 # CERN Patches
-Patch1001: 1001-cern-python-django-horizon-api-quotes.patch
-Patch1002: 1002-cern-python-django-horizon-disable-floating-ips.patch
-Patch1003: 1003-cern-python-django-horizon-extra-urls.patch
-Patch1004: 1004-cern-python-django-horizon-login-buttons.patch
-Patch1005: 1005-cern-python-django-horizon-disable-editandsecurity.patch
-Patch1006: 1006-cern-python-django-horizon-windows-powershell.patch
+Patch1001: 1001-cern-python-django-horizon-disable-floating-ips-security-groups.patch
+Patch1002: 1002-cern-python-django-horizon-extra-urls.patch
+Patch1003: 1003-cern-python-django-horizon-login-buttons.patch
+Patch1004: 1004-cern-python-django-horizon-windows-powershell.patch
+Patch1005: 1005-cern-python-django-horizon-nova-api-extrafield.patch
+Patch1006: 1006-cern-python-django-horizon-remove-piecharts.patch
+Patch1007: 1007-cern-python-django-horizon-remove-password-panel.patch
+Patch1008: 1008-cern-python-django-horizon-css-fixes.patch
 
-%if 0%{?rhel}>6 || 0%{?fedora} > 18
-# grizzly requires python-django14
-BuildRequires:   python-django14
-Requires:   python-django14 <= 1.5
-
-%else
 # epel6 has a separate Django14 package
 %if 0%{?rhel}==6
 Requires:   Django14
@@ -48,28 +55,32 @@ BuildRequires:   Django
 Requires:   Django
 %endif
 
-%endif
 
 Requires:   python-dateutil
-Requires:   python-glanceclient
-Requires:   python-keystoneclient 
-Requires:   python-novaclient >= 2012.1
-Requires:   python-quantumclient
-Requires:   python-cinderclient
-Requires:   python-swiftclient
 Requires:   pytz
-Requires:   python-netaddr
 Requires:   python-lockfile
+Requires:   python-pbr
 
 BuildRequires: python2-devel
 BuildRequires: python-setuptools
+BuildRequires: python-d2to1
+BuildRequires: python-pbr >= 0.5.21
+BuildRequires: python-lockfile
+BuildRequires: python-eventlet
+BuildRequires: python-netaddr
 
 # for checks:
 #BuildRequires:   python-django-nose
-#BuildRequires:   python-cinderclient
-#BuildRequires:   python-django-appconf
-#BuildRequires:   python-django-openstack-auth
-#BuildRequires:   python-django-compressor
+#BuildRequires:   python-coverage
+#BuildRequires:   python-mox
+#BuildRequires:   python-nose-exclude
+#BuildRequires:   python-eventlet
+#BuildRequires:   python-kombu
+BuildRequires:   python-anyjson
+BuildRequires:   pytz
+BuildRequires:   python-iso8601
+#BuildRequires:   python-nose
+
 
 # additional provides to be consistent with other django packages
 Provides: django-horizon = %{version}-%{release}
@@ -89,21 +100,30 @@ Group:      Applications/System
 Requires:   httpd
 Requires:   mod_wsgi
 Requires:   python-django-horizon >= %{version}
-Requires:   python-django-openstack-auth
-Requires:   python-django-compressor
+Requires:   python-django-openstack-auth >= 1.0.11
+Requires:   python-django-compressor >= 1.3
 Requires:   python-django-appconf
+Requires:   python-glanceclient
+Requires:   python-keystoneclient >= 0.3.2
+Requires:   python-novaclient >= 2012.1
+Requires:   python-neutronclient
+Requires:   python-cinderclient
+Requires:   python-swiftclient
+Requires:   python-heatclient
+Requires:   python-ceilometerclient >= 1.0.6
+Requires:   python-troveclient
+Requires:   python-netaddr
+Requires:   python-oslo-config
+Requires:   python-eventlet
 
 BuildRequires: python2-devel
-BuildRequires: python-django-openstack-auth
-BuildRequires: python-django-compressor
+BuildRequires: python-django-openstack-auth >= 1.0.11
+BuildRequires: python-django-compressor >= 1.3
 BuildRequires: python-django-appconf
-BuildRequires: nodejs
-BuildRequires: nodejs-less
-BuildRequires: pytz
-BuildRequires: python-netaddr
-BuildRequires: python-lockfile
+BuildRequires: python-lesscpy
+BuildRequires: python-oslo-config
 
-
+BuildRequires:   pytz 
 %description -n openstack-dashboard
 Openstack Dashboard is a web user interface for Openstack. The package
 provides a reference implementation using the Django Horizon project,
@@ -125,21 +145,38 @@ BuildRequires: python-sphinx >= 1.1.3
 # Doc building basically means we have to mirror Requires:
 BuildRequires: python-dateutil
 BuildRequires: python-glanceclient
-BuildRequires: python-keystoneclient
+BuildRequires: python-keystoneclient >= 0.3.2
 BuildRequires: python-novaclient >= 2012.1
-BuildRequires: python-quantumclient
+BuildRequires: python-neutronclient
 BuildRequires: python-cinderclient
 BuildRequires: python-swiftclient
+BuildRequires: python-heatclient
+BuildRequires: python-ceilometerclient
+BuildRequires: python-troveclient
+BuildRequires: python-oslo-sphinx
 
 %description doc
 Documentation for the Django Horizon application for talking with Openstack
 
+%package -n openstack-dashboard-theme
+Summary: OpenStack web user interface reference implementation theme module
+Requires: openstack-dashboard = %{version}
+
+%description -n openstack-dashboard-theme
+Customization module for OpenStack Dashboard to provide a branded logo.
 
 %prep
 %setup -q -n horizon-%{version}
 
 %patch0001 -p1
 %patch0002 -p1
+%patch0003 -p1
+%patch0004 -p1
+%patch0005 -p1
+%patch0006 -p1
+%patch0007 -p1
+%patch0008 -p1
+%patch0009 -p1
 
 # CERN Patches
 %patch1001 -p1
@@ -148,14 +185,48 @@ Documentation for the Django Horizon application for talking with Openstack
 %patch1004 -p1
 %patch1005 -p1
 %patch1006 -p1
+%patch1007 -p1
+%patch1008 -p1
+
 # remove unnecessary .po files
 find . -name "django*.po" -exec rm -f '{}' \;
+
+# Remove the requirements file so that pbr hooks don't add it
+# to distutils requires_dist config
+rm -rf {test-,}requirements.txt tools/{pip,test}-requires
+
+# create images for custom theme
+mkdir -p openstack_dashboard_theme/static/dashboard/img
+cp %{SOURCE10} openstack_dashboard_theme/static/dashboard/img
+cp %{SOURCE11} openstack_dashboard_theme/static/dashboard/img 
 
 # drop config snippet
 cp -p %{SOURCE4} .
 
 %build
 %{__python} setup.py build
+
+# compress css, js etc.
+cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
+# dirty hack to make SECRET_KEY work:
+sed -i 's:^SECRET_KEY =.*:SECRET_KEY = "badcafe":' openstack_dashboard/local/local_settings.py
+%{__python} manage.py collectstatic --noinput 
+%{__python} manage.py compress 
+cp -a static/dashboard %{_buildir}
+
+# build docs
+export PYTHONPATH="$( pwd ):$PYTHONPATH"
+%if 0%{?rhel}==6
+sphinx-1.0-build -b html doc/source html
+%else
+sphinx-build -b html doc/source html
+%endif
+
+# undo hack
+cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
+
+# Fix hidden-file-or-dir warnings
+rm -fr html/.doctrees html/.buildinfo
 
 %install
 %{__python} setup.py install -O1 --skip-build --root %{buildroot}
@@ -167,17 +238,6 @@ install -m 0644 -D -p %{SOURCE1} %{buildroot}%{_sysconfdir}/httpd/conf.d/opensta
 # httpd-2.4 changed the syntax
 install -m 0644 -D -p %{SOURCE2} %{buildroot}%{_sysconfdir}/httpd/conf.d/openstack-dashboard.conf
 %endif
-
-export PYTHONPATH="$( pwd ):$PYTHONPATH"
-%if 0%{?rhel}==6
-sphinx-1.0-build -b html doc/source html
-%else
-sphinx-build -b html doc/source html
-%endif
-
-# Fix hidden-file-or-dir warnings
-rm -fr html/.doctrees html/.buildinfo
-
 install -d -m 755 %{buildroot}%{_datadir}/openstack-dashboard
 install -d -m 755 %{buildroot}%{_sharedstatedir}/openstack-dashboard
 install -d -m 755 %{buildroot}%{_sysconfdir}/openstack-dashboard
@@ -185,13 +245,17 @@ install -d -m 755 %{buildroot}%{_sysconfdir}/openstack-dashboard
 # Copy everything to /usr/share
 mv %{buildroot}%{python_sitelib}/openstack_dashboard \
    %{buildroot}%{_datadir}/openstack-dashboard
-mv manage.py %{buildroot}%{_datadir}/openstack-dashboard
+cp manage.py %{buildroot}%{_datadir}/openstack-dashboard
 rm -rf %{buildroot}%{python_sitelib}/openstack_dashboard
 
+# move customization stuff to /usr/share
+mv openstack_dashboard_theme %{buildroot}%{_datadir}/openstack-dashboard
 
 # Move config to /etc, symlink it back to /usr/share
 mv %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/local/local_settings.py.example %{buildroot}%{_sysconfdir}/openstack-dashboard/local_settings
-ln -s %{_sysconfdir}/openstack-dashboard/local_settings %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/local/local_settings.py
+ln -s ../../../../../%{_sysconfdir}/openstack-dashboard/local_settings %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/local/local_settings.py
+
+mv %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/conf/*.json %{buildroot}%{_sysconfdir}/openstack-dashboard
 
 %if 0%{?rhel} > 6 || 0%{?fedora} >= 16
 %find_lang django
@@ -220,15 +284,21 @@ cat djangojs.lang >> horizon.lang
 mkdir -p %{buildroot}%{_datadir}/openstack-dashboard/static
 cp -a openstack_dashboard/static/* %{buildroot}%{_datadir}/openstack-dashboard/static
 cp -a horizon/static/* %{buildroot}%{_datadir}/openstack-dashboard/static 
+cp -a static/* %{buildroot}%{_datadir}/openstack-dashboard/static
 
 #Copy windows powershell actions
 cp -a %{SOURCE1001} %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/dashboards/project/access_and_security/templates/access_and_security/api_access
 cp -a %{SOURCE1002} %{buildroot}%{_datadir}/openstack-dashboard/static/bootstrap/img
 
-# compress css, js etc.
-cd %{buildroot}%{_datadir}/openstack-dashboard
-%{__python} manage.py collectstatic --noinput --pythonpath=../../lib/python2.6/site-packages/
-%{__python} manage.py compress --pythonpath=../../lib/python2.6/site-packages/
+# create /var/run/openstack-dashboard/ and own it
+mkdir -p %{buildroot}%{_sharedstatedir}/openstack-dashboard
+
+# create /var/log/horizon and own it
+mkdir -p %{buildroot}%{_var}/log/horizon
+
+#%check
+#sed -i 's:^SECRET_KEY =.*:SECRET_KEY = "badcafe":' openstack_dashboard/local/local_settings.py
+#./run_tests.sh -N
 
 %files -f horizon.lang
 %doc LICENSE README.rst openstack-dashboard-httpd-logging.conf
@@ -247,7 +317,6 @@ cd %{buildroot}%{_datadir}/openstack-dashboard
 %{python_sitelib}/horizon/utils
 %{python_sitelib}/horizon/workflows
 %{python_sitelib}/*.egg-info
-%exclude %{python_sitelib}/bin
 
 %files -n openstack-dashboard -f dashboard.lang
 %dir %{_datadir}/openstack-dashboard/
@@ -262,49 +331,109 @@ cd %{buildroot}%{_datadir}/openstack-dashboard
 %{_datadir}/openstack-dashboard/openstack_dashboard/templates
 %{_datadir}/openstack-dashboard/openstack_dashboard/test
 %{_datadir}/openstack-dashboard/openstack_dashboard/usage
+%{_datadir}/openstack-dashboard/openstack_dashboard/utils
 %{_datadir}/openstack-dashboard/openstack_dashboard/wsgi
+%dir %{_datadir}/openstack-dashboard/openstack_dashboard
 %dir %{_datadir}/openstack-dashboard/openstack_dashboard/locale
 %dir %{_datadir}/openstack-dashboard/openstack_dashboard/locale/??
 %dir %{_datadir}/openstack-dashboard/openstack_dashboard/locale/??_??
 %dir %{_datadir}/openstack-dashboard/openstack_dashboard/locale/??/LC_MESSAGES
 
-%{_sharedstatedir}/openstack-dashboard
 %dir %attr(0750, root, apache) %{_sysconfdir}/openstack-dashboard
+%dir %attr(0750, apache, apache) %{_sharedstatedir}/openstack-dashboard
+%dir %attr(0750, apache, apache) %{_var}/log/horizon
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/openstack-dashboard.conf
 %config(noreplace) %attr(0640, root, apache) %{_sysconfdir}/openstack-dashboard/local_settings
+%config(noreplace) %attr(0640, root, apache) %{_sysconfdir}/openstack-dashboard/keystone_policy.json
+%config(noreplace) %attr(0640, root, apache) %{_sysconfdir}/openstack-dashboard/nova_policy.json
 
 %files doc
-%doc html 
+%doc html
+
+%files -n openstack-dashboard-theme
+%{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
-* Fri Nov 29 2013 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.1.4-1.slc6.1
-- fix for openrc and ec2 credentials download of projects with blanks
+* Mon Feb 03 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.1-1.slc6.1
 - disable floating IP panel and actions
+- disable security groups panel and actions
+- remove pie charts for floating ips and security groups
 - Add subscribe and ticket urls for external sites
 - Add buttons for subscribe and help in login panel
-- Disable Edit Instance and Security Group actions
 - Add windows powershell bundle download action
+- Add name field in api.nova.NovaUsage
+- remove change password panel in settings
+- increase size of datepicker due to rendering issues on Mac+Firefox
 
-* Thu Oct 24 2013 Matthias Runge <mrunge@redhat.com> - 2013.1.4-1
-- rebase to 2013.1.4
+* Wed Dec 18 2013 Matthias Runge <mrunge@redhat.com> - 2013.2.1-1
+- rebase to 2013.2.1
 
-* Mon Aug 12 2013 Matthias Runge <mrunge@redhat.com> - 2013.1.3-1
-- rebase to 2013.1.3
+* Tue Dec 03 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-4
+- fix CVE-2013-6406 (RHBZ#1035914)
+
+* Thu Nov 21 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-3
+- add runtime requiremt python-pbr
+
+* Fri Oct 18 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-2
+- Horizon-2013.2 final
+- create /var/log/horizon
+- add requirement to python-eventlet
+
+* Thu Oct 17 2013 Matthias Runge <mrunge@redhat.com> - 2013.2.0.15.rc3
+- rebase to Havana-rc3
+
+* Tue Oct 15 2013 Matthias Runge <mrunge@redhat.com> - 2013.2.0.14.rc2
+- rebase to Havana-rc2
+
+* Fri Oct 04 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.12.rc1
+- update to Havana-rc1
+- move secret_keystone to /var/lib/openstack-dashboard
+
+* Thu Sep 19 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.11b3
+- add BuildRequires python-eventlet to fix ./manage.py issue during build
+- fix import in rhteme.less
+
+* Mon Sep 09 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.10b3
+- Havana-3 snapshot
+- drop node.js and node-less from buildrequirements
+- add runtime requirement python-lesscpy
+- own openstack_dashboard dir
+- fix keystore handling issue
+
+* Wed Aug 28 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.8b2
+- add a -custom subpackage to use a custom logo
+
+* Mon Aug 26 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.7b2
+- enable tests in check section (rhbz#856182)
+
+* Wed Aug 07 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.5b2
+- move requirements from horizon to openstack-dashboard package
+- introduce explicit requirements for dependencies
+
+* Thu Jul 25 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.4b2
+- havana-2
+- change requirements from python-quantumclient to neutronclient
+- require python-ceilometerclient
+- add requirement python-lockfile, change lockfile location to /tmp
+
+* Thu Jun 06 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.2b1
+- havana doesn't require explicitly Django-1.4
+
+* Fri May 31 2013 Matthias Runge <mrunge@redhat.com> - 2013.2-0.1b1
+- prepare for havana-1
 
 * Mon May 13 2013 Matthias Runge <mrunge@redhat.com> - 2013.1.1-1
-- update to 2013.1.1 stable release
-- move to compression using node.js/less
+- change buildrequires from lessjs to nodejs-less
+- update to 2013.1.1
 
-* Mon Apr 08 2013 Matthias Runge <mrunge@redhat.com> - 2013.1-1
-- update to grizzly final
+* Fri Apr 05 2013 Matthias Runge <mrunge@redhat.com> - 2013.1-2
+- explicitly require python-django14
 
-* Thu Mar 14 2013 Matthias Runge <mrunge@redhat.com> - 2013.1-0.7.g3
-- fix compressed css (rhbz#921036)
-- enable compression in httpd file
-- set expires in httpd config file
+* Fri Apr 05 2013 Matthias Runge <mrunge@redhat.com> - 2013.1-1
+- update to 2013.1 
 
 * Fri Mar 08 2013 Matthias Runge <mrunge@redhat.com> - 2013.1-0.6.g3
-- fix a syntax error in config file
+- fix syntax error in config
 
 * Wed Feb 27 2013 Matthias Runge <mrunge@redhat.com> - 2013.1-0.5.g3
 - update to grizzly-3

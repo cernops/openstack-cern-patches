@@ -1,9 +1,9 @@
 --- a/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 14:49:55.000000000 +0100
 +++ b/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 15:14:43.000000000 +0100
-@@ -598,6 +598,10 @@
+@@ -600,6 +600,10 @@
        .btn-icon(-91px, -19px);
      }
-
+ 
 +    a.btn-windows {
 +      .btn-icon(5px, 6px, "/static/bootstrap/img/windows.png");
 +    }
@@ -13,10 +13,10 @@
      }
 --- a/openstack_dashboard/dashboards/project/access_and_security/api_access/tables.py	2013-11-29 15:19:28.000000000 +0100
 +++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/tables.py	2013-11-29 15:21:24.000000000 +0100
-@@ -49,6 +49,14 @@
+@@ -45,6 +45,14 @@
      url = "horizon:project:access_and_security:api_access:openrc"
-
-
+ 
+ 
 +class DownloadPS(tables.LinkAction):
 +    name = "download_ps"
 +    verbose_name = _("Download PowerShell RC")
@@ -28,7 +28,7 @@
  class EndpointsTable(tables.DataTable):
      api_name = tables.Column('type',
                               verbose_name=_("Service"),
-@@ -60,4 +68,4 @@
+@@ -56,4 +64,4 @@
          name = "endpoints"
          verbose_name = _("API Endpoints")
          multi_select = False
@@ -36,18 +36,11 @@
 +        table_actions = (DownloadOpenRC, DownloadEC2, DownloadPS)
 --- a/openstack_dashboard/dashboards/project/access_and_security/api_access/urls.py	2013-11-29 15:23:14.000000000 +0100
 +++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/urls.py	2013-11-29 15:23:41.000000000 +0100
-@@ -20,10 +20,11 @@
-
- from django.conf.urls.defaults import patterns, url
-
--from .views import download_ec2_bundle, download_rc_file
-+from .views import download_ec2_bundle, download_rc_file, download_ps_file
-
-
+@@ -28,4 +28,5 @@
  urlpatterns = patterns('',
-     url(r'^ec2/$', download_ec2_bundle, name='ec2'),
-     url(r'^openrc/$', download_rc_file, name='openrc'),
-+    url(r'^ps/$', download_ps_file, name='ps'),
+     url(r'^ec2/$', views.download_ec2_bundle, name='ec2'),
+     url(r'^openrc/$', views.download_rc_file, name='openrc'),
++    url(r'^ps/$', views.download_ps_file, name='ps'),
  )
 --- a/openstack_dashboard/dashboards/project/access_and_security/api_access/views.py	2013-11-29 15:24:08.000000000 +0100
 +++ b/openstack_dashboard/dashboards/project/access_and_security/api_access/views.py	2013-11-29 15:25:00.000000000 +0100
@@ -98,10 +91,11 @@
 +        return shortcuts.redirect(request.build_absolute_uri())
 --- a/openstack_dashboard/settings.py	2013-11-29 15:28:03.000000000 +0100
 +++ b/openstack_dashboard/settings.py	2013-11-29 15:28:12.000000000 +0100
-@@ -50,6 +50,7 @@
+@@ -53,6 +53,7 @@
  MEDIA_URL = '/media/'
  STATIC_ROOT = os.path.abspath(os.path.join(ROOT_PATH, '..', 'static'))
  STATIC_URL = '/static/'
 +CACHAIN_URL = '/static/ca.pem'
-
+ 
  ROOT_URLCONF = 'openstack_dashboard.urls'
+ 

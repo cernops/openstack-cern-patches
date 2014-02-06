@@ -1,6 +1,6 @@
---- a/openstack_dashboard/settings.py	2013-06-19 14:55:01.000000000 +0200
-+++ b/openstack_dashboard/settings.py	2013-06-19 14:55:31.000000000 +0200
-@@ -65,6 +65,8 @@
+--- a/openstack_dashboard/settings.py	2014-01-27 14:31:07.000000001 +0100
++++ b/openstack_dashboard/settings.py	2014-01-27 14:31:33.000000001 +0100
+@@ -67,6 +67,8 @@
          'types': ['alert-success', 'alert-info']
      },
      'help_url': "http://docs.openstack.org",
@@ -9,20 +9,20 @@
      'exceptions': {'recoverable': exceptions.RECOVERABLE,
                     'not_found': exceptions.NOT_FOUND,
                     'unauthorized': exceptions.UNAUTHORIZED},
---- a/openstack_dashboard/templates/_header.html	2013-06-19 14:48:51.000000000 +0200
-+++ b/openstack_dashboard/templates/_header.html	2013-06-19 14:52:09.000000000 +0200
-@@ -5,6 +5,9 @@
+--- a/openstack_dashboard/templates/_header.html	2014-01-27 14:31:07.000000001 +0100
++++ b/openstack_dashboard/templates/_header.html	2014-01-27 14:31:33.000000001 +0100
+@@ -6,6 +6,9 @@
    {% if HORIZON_CONFIG.help_url %}
    <a href="{{ HORIZON_CONFIG.help_url }}" target="_new">{% trans "Help" %}</a>
    {% endif %}
 +  {% if HORIZON_CONFIG.ticket_url %}
 +  <a href="{{ HORIZON_CONFIG.ticket_url }}" target="_new">{% trans "Submit a ticket" %}</a>
 +  {% endif %}
-   <a href="{% url logout %}">{% trans "Sign Out" %}</a>
+   <a href="{% url 'logout' %}">{% trans "Sign Out" %}</a>
    {% include "horizon/common/_region_selector.html" %}
  </div>
---- a/openstack_dashboard/templates/500.html	2013-06-19 14:48:59.000000000 +0200
-+++ b/openstack_dashboard/templates/500.html	2013-06-19 14:51:23.000000000 +0200
+--- a/openstack_dashboard/templates/500.html	2014-01-27 14:31:07.000000001 +0100
++++ b/openstack_dashboard/templates/500.html	2014-01-27 14:31:33.000000001 +0100
 @@ -65,13 +65,14 @@
        <div id="text">
          {% block text %}

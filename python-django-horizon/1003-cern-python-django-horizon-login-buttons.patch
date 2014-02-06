@@ -1,7 +1,7 @@
 --- a/horizon/templates/auth/_login.html	2013-08-21 16:55:43.000000000 +0200
 +++ b/horizon/templates/auth/_login.html	2013-08-21 16:57:22.000000000 +0200
-@@ -25,4 +25,6 @@
-
+@@ -31,4 +31,6 @@
+ 
  {% block modal-footer %}
    <button type="submit" class="btn btn-primary pull-right">{% trans "Sign In" %}</button>
 +  <button type="submit" class="btn btn-success pull-left" onclick="this.form.reset();this.form.action='{{ HORIZON_CONFIG.subscribe_url }}'">{% trans "Subscribe" %}</button>

@@ -1,0 +1,10 @@
+--- a/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 14:49:55.000000000 +0100
++++ b/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 15:14:43.000000000 +0100
+@@ -730,7 +730,7 @@
+ }
+
+ .datepicker input {
+-    width: 65px;
++    width: 75px;
+     margin-right: 10px;
+ }

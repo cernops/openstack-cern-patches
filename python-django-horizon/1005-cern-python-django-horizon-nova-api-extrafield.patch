@@ -1,0 +1,11 @@
+--- a/openstack_dashboard/api/nova.py	2014-01-27 14:15:29.000000001 +0100
++++ b/openstack_dashboard/api/nova.py	2014-01-27 14:15:51.000000001 +0100
+@@ -105,7 +105,7 @@
+ 
+ class NovaUsage(base.APIResourceWrapper):
+     """Simple wrapper around contrib/simple_usage.py."""
+-    _attrs = ['start', 'server_usages', 'stop', 'tenant_id',
++    _attrs = ['name', 'start', 'server_usages', 'stop', 'tenant_id',
+              'total_local_gb_usage', 'total_memory_mb_usage',
+              'total_vcpus_usage', 'total_hours']
+ 
