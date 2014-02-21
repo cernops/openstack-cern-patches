@@ -1,0 +1,121 @@
+diff --git a/keystone/common/ldap/core.py b/keystone/common/ldap/core.py
+index c142597..888d7a5 100644
+--- a/keystone/common/ldap/core.py
++++ b/keystone/common/ldap/core.py
+@@ -274,7 +274,12 @@ class BaseLdap(object):
+                 pass
+             else:
+                 try:
+-                    obj[k] = v[0]
++		    if len(v)==1:
++                        obj[k] = v[0]
++		    else:
++			obj[k]=[]
++			for vv in v:
++			    obj[k].append(vv)
+                 except IndexError:
+                     obj[k] = None
+ 
+@@ -358,7 +363,7 @@ class BaseLdap(object):
+         query = '(&%s(objectClass=%s))' % (filter or self.filter or '',
+                                            self.object_class)
+         try:
+-            return conn.search_s(self.tree_dn,
++	     return conn.search_s(self.tree_dn,
+                                  self.LDAP_SCOPE,
+                                  query,
+                                  self.attribute_mapping.values())
+diff --git a/keystone/common/models.py b/keystone/common/models.py
+index 8ae2fed..359c350 100644
+--- a/keystone/common/models.py
++++ b/keystone/common/models.py
+@@ -118,7 +118,7 @@ class Group(Model):
+     """
+ 
+     required_keys = ('id', 'name', 'domain_id')
+-    optional_keys = ('description',)
++    optional_keys = ('description', 'member')
+ 
+ 
+ class Project(Model):
+diff --git a/keystone/identity/backends/ldap.py b/keystone/identity/backends/ldap.py
+index d23f18e..3d0e8e7 100644
+--- a/keystone/identity/backends/ldap.py
++++ b/keystone/identity/backends/ldap.py
+@@ -151,7 +151,65 @@ class Identity(identity.Driver):
+     def list_groups_for_user(self, user_id):
+         self.get_user(user_id)
+         user_dn = self.user._id_to_dn(user_id)
+-        return self.group.list_user_groups(user_dn)
++        
++	list_groups=self.group.list_user_groups(user_dn)
++	list_nested_groups=[]
++	for group in list_groups:
++	    self.get_nested_groups_for_group(group, list_nested_groups)
++	self.clean_attr_member_nested_groups(list_nested_groups)
++	return list_nested_groups
++
++    def get_nested_groups_for_group(self, group, list_nested_groups):
++	if not self.group_nested(group['id'], list_nested_groups):
++            list_nested_groups.append(group)
++	ids_groups_nested=self.get_ids_groups_nested(group)
++	if ids_groups_nested is None:
++	    return list_nested_groups
++	for id_nested_group in ids_groups_nested:
++	    if not self.group_nested(id_nested_group, list_nested_groups):
++		self.get_nested_groups_for_group(self.get_group(id_nested_group),list_nested_groups)
++        return list_nested_groups
++
++    def group_nested(self, id_nested_group, list):
++	def contains(list, filter):
++	    for x in list:
++            	if filter(x):
++                    return True
++            return False
++	return (contains(list, lambda x: x['id'] == id_nested_group))
++
++    def get_ids_groups_nested(self, dic):
++	if 'member' not in dic.keys():
++	    return None
++	list_ids_groups=[]
++	if isinstance(dic['member'], str):
++	    id_group=self.split_id_group_in_member(dic['member'])
++	    if id_group is None:
++		return None
++	    list_ids_groups.append(id_group)
++	    return list_ids_groups
++
++	for item in dic['member']:
++	    id_group=self.split_id_group_in_member(item)
++	    if id_group is not None:
++	        list_ids_groups.append(id_group)
++	if len(list_ids_groups)==0:
++	    return None
++	return list_ids_groups
++
++    def split_id_group_in_member(self, item):
++	string=item.split(",")
++    	uo=string[1].split("=")
++	if uo[1].lower()=="groups":
++	    cn=string[0].split("=")
++	    return cn[1]
++	return None
++
++    def clean_attr_member_nested_groups(self, list):
++	for group in list:
++	    if 'member' in group.keys():
++            	del group['member']
++
+ 
+     def list_groups(self):
+         return self.group.get_all()
+@@ -252,7 +252,8 @@ class GroupApi(common_ldap.BaseLdap):
+     NotFound = exception.GroupNotFound
+     options_name = 'group'
+     attribute_options_names = {'description': 'desc',
+-                               'name': 'name'}
++                               'name': 'name',
++                               'member':'member'}
+     immutable_attrs = ['name']
+     model = models.Group
+

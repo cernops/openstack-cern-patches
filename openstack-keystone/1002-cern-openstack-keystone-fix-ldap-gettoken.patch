@@ -1,0 +1,13 @@
+diff --git a/keystone/assignment/backends/ldap.py b/keystone/assignment/backends/ldap.py
+index e302388..157101c 100644
+--- a/keystone/assignment/backends/ldap.py
++++ b/keystone/assignment/backends/ldap.py
+@@ -402,7 +402,7 @@ class Assignment(assignment.Driver):
+                                             inherited_to_projects)]
+
+     def get_domain_by_name(self, domain_name):
+-        raise exception.NotImplemented()
++        return assignment.DEFAULT_DOMAIN
+
+     def list_role_assignments(self):
+         role_assignments = []

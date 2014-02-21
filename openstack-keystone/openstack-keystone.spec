@@ -1,13 +1,13 @@
 #
-# This is 2013.2.1 Havana stable release
+# This is 2013.2.2 Havana stable release
 #
 %global release_name havana
 
 %global with_doc %{!?_without_doc:1}%{?_without_doc:0}
 
 Name:           openstack-keystone
-Version:        2013.2.1
-Release:        2%{?dist}.1
+Version:        2013.2.2
+Release:        1%{?dist}.1
 Summary:        OpenStack Identity Service
 
 License:        ASL 2.0
@@ -22,7 +22,7 @@ Source21:       daemon_notify.sh
 
 
 #
-# patches_base=2013.2.1
+# patches_base=2013.2.2
 #
 Patch0001: 0001-remove-runtime-dep-on-python-pbr.patch
 Patch0002: 0002-sync-parameter-values-with-keystone-dist.conf.patch
@@ -31,6 +31,8 @@ Patch0004: 0004-improve-systemd-onready-notification.patch
 
 # CERN Patches
 Patch1001: 1001-cern-openstack-keystone-fix-ldap-v3.patch
+Patch1002: 1002-cern-openstack-keystone-fix-ldap-gettoken.patch
+Patch1003: 1003-cern-openstack-keystone-ldap-nested-groups.patch
 
 BuildArch:      noarch
 
@@ -118,6 +120,8 @@ This package contains documentation for Keystone.
 
 # Apply CERN Patches
 %patch1001 -p1
+%patch1002 -p1
+%patch1003 -p1
 
 find . \( -name .gitignore -o -name .placeholder \) -delete
 find keystone -name \*.py -exec sed -i '/\/usr\/bin\/env python/d' {} \;
@@ -152,9 +156,8 @@ install -p -D -m 644 %{SOURCE1} %{buildroot}%{_sysconfdir}/logrotate.d/openstack
 install -p -D -m 755 %{SOURCE2} %{buildroot}%{_initrddir}/openstack-keystone
 # Install sample data script.
 install -p -D -m 755 tools/sample_data.sh %{buildroot}%{_datadir}/keystone/sample_data.sh
-# TEMP until best place for this figured out: service readiness wrapper
+# Install service readiness wrapper
 install -p -D -m 755 %{SOURCE21} %{buildroot}%{_datadir}/keystone/daemon_notify.sh
-# TEMP END
 install -p -D -m 644 %{SOURCE3} %{buildroot}%{_datadir}/keystone/%{name}.upstart
 install -p -D -m 755 %{SOURCE5} %{buildroot}%{_bindir}/openstack-keystone-sample-data
 # Install sample HTTPD integration files
@@ -260,8 +263,12 @@ fi
 %endif
 
 %changelog
-* Tue Feb 05 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.1-2.slc6.1
-- backport patch to enable v3 role crud on LDAP
+* Tue Feb 17 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.1
+- backport patch to enable nested groups on LDAP
+- backport patch to enable v3 get token on LDAP
+
+* Fri Feb 14 2014 Alan Pevec <apevec@redhat.com> 2013.2.2-1
+- updated to stable havana 2013.2.2 release
 
 * Fri Jan 10 2014 Alan Pevec <apevec@redhat.com> 2013.2.1-2
 - use service readiness notification in initscript rhbz#1036515
