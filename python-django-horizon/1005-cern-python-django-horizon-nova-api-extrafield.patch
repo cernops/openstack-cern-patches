@@ -1,3 +1,8 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Add extra field in usage for nova api calls
+---
+
 --- a/openstack_dashboard/api/nova.py	2014-01-27 14:15:29.000000001 +0100
 +++ b/openstack_dashboard/api/nova.py	2014-01-27 14:15:51.000000001 +0100
 @@ -105,7 +105,7 @@

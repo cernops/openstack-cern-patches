@@ -1,6 +1,11 @@
---- a/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 14:49:55.000000000 +0100
-+++ b/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 15:14:43.000000000 +0100
-@@ -730,7 +730,7 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Increase size of datepicker due to rendering issues
+---
+
+--- a/openstack_dashboard/static/dashboard/less/horizon.less
++++ b/openstack_dashboard/static/dashboard/less/horizon.less
+@@ -734,7 +734,7 @@ form label {
  }
 
  .datepicker input {
@@ -8,3 +13,4 @@
 +    width: 75px;
      margin-right: 10px;
  }
+

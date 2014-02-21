@@ -1,3 +1,8 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Add login buttons subscribe and help
+---
+
 --- a/horizon/templates/auth/_login.html	2013-08-21 16:55:43.000000000 +0200
 +++ b/horizon/templates/auth/_login.html	2013-08-21 16:57:22.000000000 +0200
 @@ -31,4 +31,6 @@

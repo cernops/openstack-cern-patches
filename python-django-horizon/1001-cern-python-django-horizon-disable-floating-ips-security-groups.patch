@@ -1,3 +1,8 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Disable floating ips and security groups
+---
+
 --- a/openstack_dashboard/dashboards/project/instances/tables.py	2013-06-19 14:45:10.000000000 +0200
 +++ b/openstack_dashboard/dashboards/project/instances/tables.py	2013-06-19 14:45:31.000000000 +0200
 @@ -580,9 +580,7 @@

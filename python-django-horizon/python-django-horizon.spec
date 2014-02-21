@@ -1,5 +1,5 @@
 Name:       python-django-horizon
-Version:    2013.2.1
+Version:    2013.2.2
 Release:    1%{?dist}.1
 Summary:    Django application for talking to Openstack
 
@@ -7,7 +7,6 @@ Group:      Development/Libraries
 # Code in horizon/horizon/utils taken from django which is BSD
 License:    ASL 2.0 and BSD
 URL:        http://horizon.openstack.org/
-BuildArch:  noarch
 Source0:    https://launchpad.net/horizon/havana/%{version}/+download/horizon-%{version}.tar.gz
 Source1:    openstack-dashboard.conf
 Source2:    openstack-dashboard-httpd-2.4.conf
@@ -24,17 +23,14 @@ Source1001: openstack.ps.template
 Source1002: windows.png
 
 #
-# patches_base=2013.2.1
+# patches_base=2013.2.2
 #
 Patch0001: 0001-Don-t-access-the-net-while-building-docs.patch
 Patch0002: 0002-disable-debug-move-web-root.patch
 Patch0003: 0003-change-lockfile-location-to-tmp-and-also-add-localho.patch
 Patch0004: 0004-Add-a-customization-module-based-on-RHOS.patch
 Patch0005: 0005-move-RBAC-policy-files-and-checks-to-etc-openstack-d.patch
-Patch0006: 0006-move-SECRET_KEY-secret_key_store-to-tmp.patch
-Patch0007: 0007-fix-up-issues-with-customization.patch
-Patch0008: 0008-do-not-truncate-the-logo-related-rhbz-877138.patch
-Patch0009: 0009-move-SECRET_KEYSTORE-to-var-lib-openstack-dashboard.patch
+Patch0006: 0006-move-SECRET_KEYSTORE-to-var-lib-openstack-dashboard.patch
 
 # CERN Patches
 Patch1001: 1001-cern-python-django-horizon-disable-floating-ips-security-groups.patch
@@ -45,6 +41,9 @@ Patch1005: 1005-cern-python-django-horizon-nova-api-extrafield.patch
 Patch1006: 1006-cern-python-django-horizon-remove-piecharts.patch
 Patch1007: 1007-cern-python-django-horizon-remove-password-panel.patch
 Patch1008: 1008-cern-python-django-horizon-css-fixes.patch
+Patch1009: 1009-cern-python-django-horizon-piechart-fixes.patch
+
+BuildArch:  noarch
 
 # epel6 has a separate Django14 package
 %if 0%{?rhel}==6
@@ -63,6 +62,7 @@ Requires:   python-pbr
 
 BuildRequires: python2-devel
 BuildRequires: python-setuptools
+BuildRequires: git
 BuildRequires: python-d2to1
 BuildRequires: python-pbr >= 0.5.21
 BuildRequires: python-lockfile
@@ -167,26 +167,15 @@ Customization module for OpenStack Dashboard to provide a branded logo.
 
 %prep
 %setup -q -n horizon-%{version}
+# Use git to manage patches.
+# http://rwmj.wordpress.com/2011/08/09/nice-rpm-git-patch-management-trick/
+git init
+git config user.email "python-django-horizon-owner@fedoraproject.org"
+git config user.name "python-django-horizon"
+git add .
+git commit -a -q -m "%{version} baseline"
+git am %{patches}
 
-%patch0001 -p1
-%patch0002 -p1
-%patch0003 -p1
-%patch0004 -p1
-%patch0005 -p1
-%patch0006 -p1
-%patch0007 -p1
-%patch0008 -p1
-%patch0009 -p1
-
-# CERN Patches
-%patch1001 -p1
-%patch1002 -p1
-%patch1003 -p1
-%patch1004 -p1
-%patch1005 -p1
-%patch1006 -p1
-%patch1007 -p1
-%patch1008 -p1
 
 # remove unnecessary .po files
 find . -name "django*.po" -exec rm -f '{}' \;
@@ -354,7 +343,9 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 %{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
-* Mon Feb 03 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.1-1.slc6.1
+* Mon Feb 21 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.1
+- Remove line in full pie chart
+- Include Volume quotas in project overview
 - disable floating IP panel and actions
 - disable security groups panel and actions
 - remove pie charts for floating ips and security groups
@@ -364,6 +355,9 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 - Add name field in api.nova.NovaUsage
 - remove change password panel in settings
 - increase size of datepicker due to rendering issues on Mac+Firefox
+
+* Fri Feb 14 2014 Matthias Runge <mrunge@redhat.com> - 2013.2.2-1
+- rebase to 2013.2.2
 
 * Wed Dec 18 2013 Matthias Runge <mrunge@redhat.com> - 2013.2.1-1
 - rebase to 2013.2.1

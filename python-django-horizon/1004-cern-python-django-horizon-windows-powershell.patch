@@ -1,3 +1,8 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Add powershell shell script for windows clients
+---
+
 --- a/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 14:49:55.000000000 +0100
 +++ b/openstack_dashboard/static/dashboard/less/horizon.less	2013-11-29 15:14:43.000000000 +0100
 @@ -600,6 +600,10 @@

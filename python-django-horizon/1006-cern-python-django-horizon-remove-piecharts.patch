@@ -1,3 +1,8 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Remove piecharts for features not used
+---
+
 --- a/horizon/templates/horizon/common/_limit_summary.html	2014-02-03 09:22:55.000000001 +0100
 +++ b/horizon/templates/horizon/common/_limit_summary.html	2014-02-03 09:23:07.000000001 +0100
 @@ -22,18 +22,4 @@

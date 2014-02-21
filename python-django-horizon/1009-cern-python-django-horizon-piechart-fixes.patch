@@ -1,0 +1,85 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Add piecharts for volumes usage in overview
+---
+
+--- a/horizon/static/horizon/js/horizon.d3piechart.js
++++ b/horizon/static/horizon/js/horizon.d3piechart.js
+@@ -82,7 +82,13 @@ horizon.d3_pie_chart = {
+             .attr("d", arc)
+             .style("fill", self.bkgrnd)
+             .style("stroke", "#CCCCCC")
+-            .style("stroke-width", 1)
++            .style("stroke-width", function(d) {
++              if (self.data[0].percentage >= 100) {
++                return 0;
++              } else {
++                return 1;
++              }
++            })
+             .each(function(d) {return self.current = d;})
+         .transition()
+           .duration(500)
+--- a/horizon/templates/horizon/common/_limit_summary.html
++++ b/horizon/templates/horizon/common/_limit_summary.html
+@@ -36,4 +36,19 @@
+       {% blocktrans with used=usage.limits.totalRAMUsed|mb_float_format available=usage.limits.maxTotalRAMSize|mb_float_format %}Used <span> {{ used }} </span> of <span> {{ available }} </span>{% endblocktrans %}
+     </strong>
+     </div>
++  {% if usage.limits.totalVolumesUsed %}
++    <div class="d3_quota_bar">
++      <div class="d3_pie_chart" data-used="{% widthratio usage.limits.totalVolumesUsed usage.limits.maxTotalVolumes 100 %}"></div>
++      <strong>{% trans "Available Volumes" %} <br />
++        {% blocktrans with used=usage.limits.totalVolumesUsed|intcomma available=usage.limits.maxTotalVolumes|intcomma %}Used <span> {{ used }} </span> of <span> {{ available }} </span>{% endblocktrans %}
++      </strong>
++    </div>
++
++    <div class="d3_quota_bar">
++      <div class="d3_pie_chart" data-used="{% widthratio usage.limits.totalGigabytesUsed usage.limits.maxTotalVolumeGigabytes 100 %}"></div>
++      <strong>{% trans "Available Volume Storage" %} <br />
++        {% blocktrans with used=usage.limits.totalGigabytesUsed|diskgbformat available=usage.limits.maxTotalVolumeGigabytes|diskgbformat %}Used <span> {{ used }} </span> of <span> {{ available  }} </span>{% endblocktrans %}
++      </strong>
++    </div>
++  {% endif %}
+ </div>
+--- a/openstack_dashboard/usage/base.py
++++ b/openstack_dashboard/usage/base.py
+@@ -180,14 +180,26 @@ class BaseUsage(object):
+             self._set_neutron_limit(self.limits, neutron_quotas,
+                                     'security_group')
+ 
++    def get_cinder_limits(self):
++        """Get volume limits if cinder is enabled."""
++        if not api.base.is_service_enabled(self.request, 'volume'):
++            return
++        try:
++            self.limits.update(api.cinder.tenant_absolute_limits(self.request))
++        except Exception:
++            msg = _("Unable to retrieve volume limit information.")
++            exceptions.handle(self.request, msg)
++
++        return
++
+     def get_limits(self):
+         try:
+             self.limits = api.nova.tenant_absolute_limits(self.request)
+         except Exception:
+             exceptions.handle(self.request,
+                               _("Unable to retrieve limit information."))
+-
+         self.get_neutron_limits()
++        self.get_cinder_limits()
+ 
+     def get_usage_list(self, start, end):
+         raise NotImplementedError("You must define a get_usage_list method.")
+--- a/openstack_dashboard/usage/quotas.py
++++ b/openstack_dashboard/usage/quotas.py
+@@ -232,6 +232,8 @@ def tenant_quota_usages(request):
+ 
+ 
+ def tenant_limit_usages(request):
++    #TODO(licostan): This method shall be removed from Quota module.
++    #ProjectUsage/BaseUsage maybe used instead on volume/image dashboards.
+     limits = {}
+ 
+     try:

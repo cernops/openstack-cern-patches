@@ -1,3 +1,8 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 21 Feb 2014 08:11:00 +0200
+Subject: [PATCH] CERN Add extra urls to settings
+---
+
 --- a/openstack_dashboard/settings.py	2014-01-27 14:31:07.000000001 +0100
 +++ b/openstack_dashboard/settings.py	2014-01-27 14:31:33.000000001 +0100
 @@ -67,6 +67,8 @@
