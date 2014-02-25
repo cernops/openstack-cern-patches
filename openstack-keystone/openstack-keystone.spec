@@ -7,7 +7,7 @@
 
 Name:           openstack-keystone
 Version:        2013.2.2
-Release:        1%{?dist}.1
+Release:        1%{?dist}.2
 Summary:        OpenStack Identity Service
 
 License:        ASL 2.0
@@ -263,6 +263,9 @@ fi
 %endif
 
 %changelog
+* Tue Feb 25 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.2
+- fixes on list groups assignments on LDAP
+
 * Tue Feb 17 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.1
 - backport patch to enable nested groups on LDAP
 - backport patch to enable v3 get token on LDAP
