@@ -46,9 +46,9 @@ index d23f18e..3d0e8e7 100644
 -                                                  self.filter or '')
 -        memberships = self.get_all(query)
 +        for sid in sids:
-+            query = '(&(objectClass=%s)(objectSID="%s")%s)' % (self.object_class,
-+                                                               self._sid2str(sid),
-+                                                               self.filter or '')
++            query = '(&(objectClass=%s)(objectSID=%s)%s)' % (self.object_class,
++                                                             self._sid2str(sid),
++                                                             self.filter or '')
 +            [memberships.append(m) for m in self.get_all(query)]
          return memberships
 
