@@ -1,6 +1,6 @@
 Name:       python-django-horizon
 Version:    2013.2.2
-Release:    1%{?dist}.1
+Release:    1%{?dist}.3
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -21,6 +21,7 @@ Source11:   rh-logo.png
 # CERN sources
 Source1001: openstack.ps.template
 Source1002: windows.png
+Source1003: 503.html
 
 #
 # patches_base=2013.2.2
@@ -42,6 +43,8 @@ Patch1006: 1006-cern-python-django-horizon-remove-piecharts.patch
 Patch1007: 1007-cern-python-django-horizon-remove-password-panel.patch
 Patch1008: 1008-cern-python-django-horizon-css-fixes.patch
 Patch1009: 1009-cern-python-django-horizon-piechart-fixes.patch
+Patch1010: 1010-cern-python-django-horizon-add-maintenance-mode.patch
+Patch1011: 1011-cern-python-django-horizon-backport-bug1247056.patch
 
 BuildArch:  noarch
 
@@ -59,6 +62,9 @@ Requires:   python-dateutil
 Requires:   pytz
 Requires:   python-lockfile
 Requires:   python-pbr
+
+# CERN Requirements
+Requires:   python-django-maintenancemode
 
 BuildRequires: python2-devel
 BuildRequires: python-setuptools
@@ -278,6 +284,7 @@ cp -a static/* %{buildroot}%{_datadir}/openstack-dashboard/static
 #Copy windows powershell actions
 cp -a %{SOURCE1001} %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/dashboards/project/access_and_security/templates/access_and_security/api_access
 cp -a %{SOURCE1002} %{buildroot}%{_datadir}/openstack-dashboard/static/bootstrap/img
+cp -a %{SOURCE1003} %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/templates
 
 # create /var/run/openstack-dashboard/ and own it
 mkdir -p %{buildroot}%{_sharedstatedir}/openstack-dashboard
@@ -343,7 +350,13 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 %{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
-* Mon Feb 21 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.1
+* Fri Feb 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.3
+- backport bug1247056 too many novaclient calls
+
+* Fri Feb 21 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.2
+- add maintenance mode to django
+
+* Fri Feb 21 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.1
 - Remove line in full pie chart
 - Include Volume quotas in project overview
 - disable floating IP panel and actions
