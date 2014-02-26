@@ -7,7 +7,7 @@
 
 Name:           openstack-keystone
 Version:        2013.2.2
-Release:        1%{?dist}.2
+Release:        1%{?dist}.3
 Summary:        OpenStack Identity Service
 
 License:        ASL 2.0
@@ -263,6 +263,9 @@ fi
 %endif
 
 %changelog
+* Tue Feb 25 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.3
+- added performance improvement in nested group search
+
 * Tue Feb 25 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.2
 - fixes on list groups assignments on LDAP
 

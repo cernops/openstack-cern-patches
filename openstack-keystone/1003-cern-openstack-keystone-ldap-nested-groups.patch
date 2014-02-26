@@ -2,16 +2,15 @@ diff --git a/keystone/identity/backends/ldap.py b/keystone/identity/backends/lda
 index d23f18e..3d0e8e7 100644
 --- a/keystone/identity/backends/ldap.py
 +++ b/keystone/identity/backends/ldap.py
-@@ -15,7 +15,7 @@
+@@ -15,6 +15,7 @@
  # under the License.
  from __future__ import absolute_import
  import uuid
--
 +import struct
+
  import ldap
 
- from keystone import clean
-@@ -324,14 +324,36 @@
+@@ -324,14 +325,37 @@ class GroupApi(common_ldap.BaseLdap):
          finally:
              conn.unbind_s()
 
@@ -45,11 +44,12 @@ index d23f18e..3d0e8e7 100644
 -                                                  user_dn,
 -                                                  self.filter or '')
 -        memberships = self.get_all(query)
-+        for sid in sids:
-+            query = '(&(objectClass=%s)(objectSID=%s)%s)' % (self.object_class,
-+                                                             self._sid2str(sid),
-+                                                             self.filter or '')
-+            [memberships.append(m) for m in self.get_all(query)]
++        groups_query = ''.join(['(objectSID=%s)' % self._sid2str(sid) for sid in sids])
++        query = '(&(objectClass=%s)(|%s)%s)' % (self.object_class,
++                                                groups_query,
++                                                self.filter or '')
++        for m in self.get_all(query):
++            memberships.append(m)
          return memberships
 
      def list_group_users(self, group_id):
@@ -96,7 +96,7 @@ index d23f18e..3d0e8e7 100644
 @@ -639,6 +646,35 @@
                  tenant_dn=tenant_dn))
          return res
-
+ 
 +    def list_project_roles_for_group(self, group_dn, project_subtree):
 +        conn = self.get_connection()
 +        query = '(&(objectClass=%s)(%s=%s))' % (self.object_class,
