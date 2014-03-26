@@ -1,6 +1,6 @@
 Name:       python-django-horizon
 Version:    2013.2.2
-Release:    1%{?dist}.3
+Release:    1%{?dist}.4
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -45,6 +45,7 @@ Patch1008: 1008-cern-python-django-horizon-css-fixes.patch
 Patch1009: 1009-cern-python-django-horizon-piechart-fixes.patch
 Patch1010: 1010-cern-python-django-horizon-add-maintenance-mode.patch
 Patch1011: 1011-cern-python-django-horizon-backport-bug1247056.patch
+Patch1012: 1012-cern-python-django-horizon-fix-piechart-ie9-ie10.patch
 
 BuildArch:  noarch
 
@@ -350,6 +351,9 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 %{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
+* Wed Apr 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.4
+- fix piecharts for IE9 and IE10 due to lack of support of HTML5 dataset
+
 * Fri Feb 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.3
 - backport bug1247056 too many novaclient calls
 

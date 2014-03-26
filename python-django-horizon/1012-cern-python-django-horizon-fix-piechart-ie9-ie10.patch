@@ -1,0 +1,19 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Fri, 26 Mar 2014 08:11:00 +0200
+Subject: [PATCH] CERN Fix piecharts for IE 9 and IE10
+---
+--- a/horizon/static/horizon/js/horizon.d3piechart.js	2014-03-26 14:59:39.000000001 +0100
++++ b/horizon/static/horizon/js/horizon.d3piechart.js	2014-03-26 15:00:44.000000001 +0100
+@@ -28,7 +28,11 @@
+     self.chart = d3.selectAll(".d3_pie_chart");
+ 
+     for (var i = 0; i < pie_chart_data.length; i++) {
+-      used = parseInt(pie_chart_data[i].dataset.used);
++      try {
++        used = parseInt(pie_chart_data[i].dataset.used);
++      } catch (e) {
++        used = parseInt(pie_chart_data[i].getAttribute("data-used"));
++      }
+       self.data = [{"percentage":used}, {"percentage":100 - used}];
+       self.pieChart(i);
+     }
