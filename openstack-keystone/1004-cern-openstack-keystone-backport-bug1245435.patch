@@ -1,0 +1,62 @@
+From a120f251d0ccba90803952ccf6099e86334c4df9 Mon Sep 17 00:00:00 2001
+From: Steven Hardy <shardy@redhat.com>
+Date: Tue, 29 Oct 2013 16:50:17 +0000
+Subject: [PATCH] Fix issue deleting ec2-credentials as non-admin user
+
+The ec2tokens controller incorrectly uses the access id, not the
+hashed credential id in _assert_owner, which means that non-admin
+users can't delete their ec2-credentials.  Adding the hashing, as
+in _get_credentials fixes the problem.  Test added demonstrating
+the issue.
+
+Change-Id: Ifb6e3e10a50541cf21d25880bd74e9aeb6df4f26
+Closes-Bug: #1245435
+(cherry picked from commit 85ca6ac8a7fab14c659673ddf47777badcbcbf04)
+---
+ keystone/contrib/ec2/controllers.py       |    3 ++-
+ keystone/tests/test_keystoneclient_sql.py |   18 ++++++++++++++++++
+ 2 files changed, 20 insertions(+), 1 deletions(-)
+
+diff --git a/keystone/contrib/ec2/controllers.py b/keystone/contrib/ec2/controllers.py
+index 262cbe5..4250462 100644
+--- a/keystone/contrib/ec2/controllers.py
++++ b/keystone/contrib/ec2/controllers.py
+@@ -280,7 +280,8 @@ class Ec2Controller(controller.V2Controller):
+         :raises exception.Forbidden: on failure
+ 
+         """
+-        cred_ref = self.credential_api.get_credential(credential_id)
++        ec2_credential_id = utils.hash_access_key(credential_id)
++        cred_ref = self.credential_api.get_credential(ec2_credential_id)
+         if user_id != cred_ref['user_id']:
+             raise exception.Forbidden(_('Credential belongs to another user'))
+ 
+diff --git a/keystone/tests/test_keystoneclient_sql.py b/keystone/tests/test_keystoneclient_sql.py
+index be7206a..8e068be 100644
+--- a/keystone/tests/test_keystoneclient_sql.py
++++ b/keystone/tests/test_keystoneclient_sql.py
+@@ -183,6 +183,24 @@ class KcMasterSqlTestCase(test_keystoneclient.KcMasterTestCase, sql.Base):
+         creds = self.default_client.ec2.list(user_id=self.user_foo['id'])
+         self.assertEquals(creds, [])
+ 
++    def test_ec2_credential_crud_non_admin(self):
++        na_client = self.get_client(self.user_two)
++        creds = na_client.ec2.list(user_id=self.user_two['id'])
++        self.assertEqual(creds, [])
++
++        cred = na_client.ec2.create(user_id=self.user_two['id'],
++                                    tenant_id=self.tenant_baz['id'])
++        creds = na_client.ec2.list(user_id=self.user_two['id'])
++        self.assertEqual(creds, [cred])
++        got = na_client.ec2.get(user_id=self.user_two['id'],
++                                access=cred.access)
++        self.assertEqual(cred, got)
++
++        na_client.ec2.delete(user_id=self.user_two['id'],
++                             access=cred.access)
++        creds = na_client.ec2.list(user_id=self.user_two['id'])
++        self.assertEqual(creds, [])
++
+     def test_ec2_list_credentials(self):
+         cred_1 = self.default_client.ec2.create(
+             user_id=self.user_foo['id'],

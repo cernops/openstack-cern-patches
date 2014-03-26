@@ -7,7 +7,7 @@
 
 Name:           openstack-keystone
 Version:        2013.2.2
-Release:        1%{?dist}.3
+Release:        1%{?dist}.4
 Summary:        OpenStack Identity Service
 
 License:        ASL 2.0
@@ -33,6 +33,7 @@ Patch0004: 0004-improve-systemd-onready-notification.patch
 Patch1001: 1001-cern-openstack-keystone-fix-ldap-v3.patch
 Patch1002: 1002-cern-openstack-keystone-fix-ldap-gettoken.patch
 Patch1003: 1003-cern-openstack-keystone-ldap-nested-groups.patch
+Patch1004: 1004-cern-openstack-keystone-backport-bug1245435.patch
 
 BuildArch:      noarch
 
@@ -122,6 +123,7 @@ This package contains documentation for Keystone.
 %patch1001 -p1
 %patch1002 -p1
 %patch1003 -p1
+%patch1004 -p1
 
 find . \( -name .gitignore -o -name .placeholder \) -delete
 find keystone -name \*.py -exec sed -i '/\/usr\/bin\/env python/d' {} \;
@@ -263,6 +265,9 @@ fi
 %endif
 
 %changelog
+* Wed Apr 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.4
+- fix issue deleting ec2-credentials as non-admin user (bug#1245435)
+
 * Tue Feb 25 2014 Jose Castro Leon <jose.castro.leon@cern.ch> 2013.2.2-1.slc6.3
 - added performance improvement in nested group search
 
