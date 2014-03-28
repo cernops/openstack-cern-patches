@@ -1,5 +1,5 @@
---- nova/api/openstack/compute/servers.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/api/openstack/compute/servers.py	2014-02-20 22:13:49.000000000 +0100
+--- nova/api/openstack/compute/servers.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/api/openstack/compute/servers.py	2014-03-12 09:10:49.000000000 +0100
 @@ -39,7 +39,10 @@
  from nova.openstack.common import uuidutils
  from nova import policy
@@ -12,14 +12,10 @@
  
  server_opts = [
      cfg.BoolOpt('enable_instance_password',
-@@ -756,9 +759,80 @@
-         name = server_dict['name']
-         self._validate_server_name(name)
+@@ -758,7 +761,79 @@
          name = name.strip()
--
-+        
-         image_uuid = self._image_from_req_data(body)
  
+         image_uuid = self._image_from_req_data(body)
 +
 +        if len(name) > 64:
 +            msg = "Instance name too long"
@@ -29,9 +25,12 @@
 +            msg = "Instance name is not a valid hostname"
 +            raise exc.HTTPBadRequest(explanation=msg)
 +
-+        image_service = nova.image.glance.get_default_image_service()
-+        image_metadata = image_service.show(context, image_uuid)
-+        
++        if image_uuid != '':
++            image_service = nova.image.glance.get_default_image_service()
++            image_metadata = image_service.show(context, image_uuid)
++        else:
++            image_metadata = {}
++
 +        if 'properties' in image_metadata.keys()\
 +                         and 'os' in image_metadata['properties'].keys():
 +            if (image_metadata['properties']['os']).lower() == 'windows' and\
@@ -58,7 +57,7 @@
 +            raise exc.HTTPBadRequest(explanation=msg)
 +
 +        metadata = server_dict.get('metadata', {})
-+
+ 
 +        if 'landb-responsible' in metadata.keys() and\
 +            metadata['landb-responsible'] != '':
 +            user_id = client_xldap.user_exists(metadata['landb-responsible'])
@@ -68,7 +67,7 @@
 +            else:
 +                msg = "Cannot find user/egroup for responsible user"
 +                raise exc.HTTPBadRequest(explanation=msg)
-+            
++
 +        if 'landb-mainuser' in metadata.keys() and\
 +            metadata['landb-mainuser'] != '':
 +            user_id = client_xldap.user_exists(metadata['landb-mainuser'])
@@ -90,11 +89,10 @@
 +                            "a valid hostname" % str(alias))
 +                    raise exc.HTTPBadRequest(explanation=msg)
 +
-+
          personality = server_dict.get('personality')
          config_drive = None
          if self.ext_mgr.is_loaded('os-config-drive'):
-@@ -882,7 +956,23 @@
+@@ -882,7 +957,23 @@
          if min_count > max_count:
              msg = _('min_count must be <= max_count')
              raise exc.HTTPBadRequest(explanation=msg)
@@ -103,14 +101,14 @@
 +            msg = ("Instance name too long for multiple instances creation. "
 +                   "Only 27 characters allowed.")
 +            raise exc.HTTPBadRequest(explanation=msg)
- 
++
 +        if max_count > min_count and 'properties' in image_metadata.keys()\
 +                         and 'os' in image_metadata['properties'].keys():
 +            if (image_metadata['properties']['os']).lower() == 'windows':
 +                msg = ("Windows images don't support multiple instances "
 +                       "creation")
 +                raise exc.HTTPBadRequest(explanation=msg)
-+
+ 
 +        if max_count > min_count and 'landb-alias' in metadata.keys():
 +            msg = ("With multiple instances is not possible to set alias.")
 +            raise exc.HTTPBadRequest(explanation=msg)
@@ -118,22 +116,23 @@
          auto_disk_config = False
          if self.ext_mgr.is_loaded('OS-DCF'):
              auto_disk_config = server_dict.get('auto_disk_config')
-@@ -996,9 +1086,10 @@
+@@ -996,10 +1087,10 @@
          update_dict = {}
  
          if 'name' in body['server']:
 -            name = body['server']['name']
 -            self._validate_server_name(name)
 -            update_dict['display_name'] = name.strip()
+-
 +
 +            msg = _("Hostname cannot be updated.")
 +            raise exc.HTTPBadRequest(explanation=msg)
 +
- 
          if 'accessIPv4' in body['server']:
              access_ipv4 = body['server']['accessIPv4']
+             if access_ipv4:
 --- nova/cells/filters/project_target_cell.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/cells/filters/project_target_cell.py	2014-02-03 15:50:55.000000000 +0100
++++ nova/cells/filters/project_target_cell.py	2014-03-12 09:10:50.000000000 +0100
 @@ -0,0 +1,89 @@
 +# Copyright (c) 2014 CERN
 +# All Rights Reserved.
@@ -224,8 +223,8 @@
 +        predicate = versionpredicate.VersionPredicate(
 +                             'prop (%s)' % version_requires)
 +        return predicate.satisfied_by(version)
---- nova/cells/messaging.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/cells/messaging.py	2014-02-06 11:09:43.000000000 +0100
+--- nova/cells/messaging.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/cells/messaging.py	2014-03-12 09:10:51.000000000 +0100
 @@ -49,7 +49,9 @@
  from nova.openstack.common import timeutils
  from nova.openstack.common import uuidutils
@@ -237,7 +236,21 @@
  
  cell_messaging_opts = [
      cfg.IntOpt('max_hop_count',
-@@ -994,6 +996,14 @@
+@@ -874,10 +876,11 @@
+     def resize_instance(self, message, instance, flavor,
+                         extra_instance_updates):
+         """Resize an instance via compute_api.resize()."""
++
+         self._call_compute_api_with_obj(message.ctxt, instance, 'resize',
+-                                        flavor_id=flavor['id'],
++                                        flavor_id=flavor['flavorid'],
+                                         **extra_instance_updates)
+-
++
+     def live_migrate_instance(self, message, instance, block_migration,
+                               disk_over_commit, host_name):
+         """Live migrate an instance via compute_api.live_migrate()."""
+@@ -994,6 +997,14 @@
                  self.db.instance_create(message.ctxt, instance,
                                          legacy=False)
          if info_cache:
@@ -252,9 +265,9 @@
              try:
                  self.db.instance_info_cache_update(
                          message.ctxt, instance_uuid, info_cache)
---- nova/cells/scheduler.py	2013-12-16 02:31:39.000000000 +0100
-+++ nova/cells/scheduler.py	2014-02-20 21:17:39.000000000 +0100
-@@ -84,24 +84,25 @@
+--- nova/cells/scheduler.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/cells/scheduler.py	2014-03-12 09:10:53.000000000 +0100
+@@ -84,27 +84,29 @@
  
      def _create_instances_here(self, ctxt, instance_uuids, instance_properties,
              instance_type, image, security_groups, block_device_mapping):
@@ -296,16 +309,22 @@
              instance = instance_obj.Instance()
              instance.update(instance_values)
              instance.uuid = instance_uuid
-@@ -112,7 +113,7 @@
++
+             instance = self.compute_api.create_db_entry_for_new_instance(
+                     ctxt,
+                     instance_type,
+@@ -112,8 +114,8 @@
                      instance,
                      security_groups,
                      block_device_mapping,
 -                    num_instances, i)
+-
 +                    1, i)
- 
++
              instance = obj_base.obj_to_primitive(instance)
              self.msg_runner.instance_update_at_top(ctxt, instance)
-@@ -197,7 +198,9 @@
+ 
+@@ -197,7 +199,9 @@
              build_inst_kwargs):
          """Attempt to build instance(s) or send msg to child cell."""
          ctxt = message.ctxt
@@ -317,7 +336,7 @@
          instance_type = filter_properties['instance_type']
          image = build_inst_kwargs['image']
 --- nova/cern.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/cern.py	2014-02-05 17:20:59.000000000 +0100
++++ nova/cern.py	2014-03-12 09:10:54.000000000 +0100
 @@ -0,0 +1,333 @@
 +# Copyright (c) 2014 CERN
 +# All Rights Reserved.
@@ -387,7 +406,7 @@
 +        return client
 +
 +
-+    def vm_update(self, device, new_device=None, 
++    def vm_update(self, device, new_device=None,
 +            location=None, manufacter=None, model=None, description=None, tag=None,
 +            operating_system=None, responsible_person=None, user_person=None):
 +        """Update vm metadata in landb"""
@@ -399,23 +418,23 @@
 +
 +        if new_device == None: new_device = device
 +
-+        if location == None: 
++        if location == None:
 +            location = {'Floor':'0', 'Room':'0', 'Building':'0'}
 +
 +        if manufacter == None:
 +            manufacter = 'KVM'
 +
-+        if model == None: 
++        if model == None:
 +            model = 'VIRTUAL MACHINE'
 +
-+        if description == None and metadata != None: 
++        if description == None and metadata != None:
 +            description = metadata.Description if metadata.Description != None\
 +             else ''
 +
-+        if tag == None: 
++        if tag == None:
 +            tag = 'OPENSTACK VM'
 +
-+        if operating_system == None and metadata != None: 
++        if operating_system == None and metadata != None:
 +            operating_system = metadata.OperatingSystem
 +
 +        if responsible_person == None and metadata != None:
@@ -462,21 +481,21 @@
 +                else:
 +                    break
 +
-+        os = {'Name': 'LINUX', 
++        os = {'Name': 'LINUX',
 +              'Version': 'UNKNOWN'}
 +
-+        responsible = {'FirstName':'E-GROUP', 
-+                       'Name':'AI-OPENSTACK-ADMIN', 
++        responsible = {'FirstName':'E-GROUP',
++                       'Name':'AI-OPENSTACK-ADMIN',
 +                       'Department':'IT'}
 +
-+        user_person = {'FirstName':'E-GROUP', 
-+                       'Name':'AI-OPENSTACK-ADMIN', 
++        user_person = {'FirstName':'E-GROUP',
++                       'Name':'AI-OPENSTACK-ADMIN',
 +                       'Department':'IT'}
 +
 +        try:
 +            self.client.service.vmNetReset(device)
-+            self.vm_update(device, new_device=new_device, 
-+                description='Not in use', operating_system=os, 
++            self.vm_update(device, new_device=new_device,
++                description='Not in use', operating_system=os,
 +                responsible_person=responsible, user_person=user_person)
 +        except Exception as e:
 +            LOG.error(_("Cannot delete vm from landb: %s" % str(e)))
@@ -575,7 +594,7 @@
 +        """Get service information"""
 +        try:
 +            return self.client.service.getServiceInfo(service)
-+        except Exception as e:        
++        except Exception as e:
 +            LOG.error(_("Cannot get service information"))
 +            raise exception.CernLanDB()
 +
@@ -584,13 +603,13 @@
 +        """Get devices from service"""
 +        try:
 +            return self.client.service.getDevicesFromService(service)
-+        except Exception as e:        
++        except Exception as e:
 +            LOG.error(_("Cannot devices from service: %s - %s"), service, str(e))
 +            raise exception.CernLanDB()
 +
 +
 +    def getDeviceInfo(self, device):
-+        """Get device information"""            
++        """Get device information"""
 +        try:
 +            return self.client.service.getDeviceInfo(device)
 +        except Exception as e:
@@ -599,7 +618,7 @@
 +
 +
 +class Xldap:
-+    def __init__(self, url='xldap.cern.ch', protocol_version=ldap.VERSION3, 
++    def __init__(self, url='xldap.cern.ch', protocol_version=ldap.VERSION3,
 +                 searchScope=ldap.SCOPE_SUBTREE, retrieveAttributes=None):
 +        self.client = ldap.open(url)
 +        self.client.protocol_version = protocol_version
@@ -610,7 +629,7 @@
 +        """Check if an user exists at CERN"""
 +        try:
 +            searchFilter = "cn="+user
-+            ldap_result_id = self.client.search(baseDN, self.searchScope, 
++            ldap_result_id = self.client.search(baseDN, self.searchScope,
 +                        searchFilter, self.retrieveAttributes)
 +            result_type, result_data = self.client.result(ldap_result_id, 0)
 +            if (result_data == []):
@@ -625,7 +644,7 @@
 +        """Check if an egroup exists at CERN"""
 +        try:
 +            searchFilter = "cn="+egroup
-+            ldap_result_id = self.client.search(baseDN, self.searchScope, 
++            ldap_result_id = self.client.search(baseDN, self.searchScope,
 +                        searchFilter, self.retrieveAttributes)
 +            result_type, result_data = self.client.result(ldap_result_id, 0)
 +            if (result_data == []):
@@ -652,12 +671,13 @@
 +            LOG.error(_("Cannot check if VM is in AD. %s" % str(e)))
 +            raise exception.CernActiveDirectory()
 +
---- nova/cmd/manage.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/cmd/manage.py	2014-02-05 16:51:19.000000000 +0100
-@@ -1240,6 +1240,83 @@
+--- nova/cmd/manage.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/cmd/manage.py	2014-03-12 09:10:55.000000000 +0100
+@@ -1239,7 +1239,82 @@
+                     transport['port'], transport['virtual_host']))
          print(fmt % ('-' * 3, '-' * 10, '-' * 6, '-' * 10, '-' * 15,
                  '-' * 5, '-' * 10))
- 
+-
 +
 +class CernCommands(object):
 +    """Class for CERN newtork integration."""
@@ -734,20 +754,21 @@
 +        net_manager = importutils.import_object(CONF.network_manager)
 +        net_manager.update_network(context.get_admin_context(), clustername)
 +
-+
  
  CATEGORIES = {
      'account': AccountCommands,
-@@ -1259,6 +1336,7 @@
+@@ -1259,6 +1334,9 @@
      'shell': ShellCommands,
      'vm': VmCommands,
      'vpn': VpnCommands,
++
 +    'cern': CernCommands,
++
  }
  
  
---- nova/compute/api.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/compute/api.py	2014-02-04 16:47:03.000000000 +0100
+--- nova/compute/api.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/compute/api.py	2014-03-12 09:10:56.000000000 +0100
 @@ -72,7 +72,9 @@
  from nova import servicegroup
  from nova import utils
@@ -772,20 +793,22 @@
      cfg.BoolOpt('allow_migrate_to_same_host',
                  default=False,
                  help='Allow migrate machine to the same host. '
-@@ -499,8 +507,10 @@
+@@ -498,10 +506,10 @@
+             else:
                  raise exception.InvalidInput(
                          reason="Unable to parse availability_zone")
- 
+-
 -        if not availability_zone:
 -            availability_zone = CONF.default_schedule_zone
+-
 +
 +#        if not availability_zone:
 +#            availability_zone = CONF.default_schedule_zone
 +
- 
          if forced_host:
              check_policy(context, 'create:forced_host', {})
-@@ -1079,7 +1089,9 @@
+         if forced_node:
+@@ -1079,7 +1087,9 @@
              instance.hostname = utils.sanitize_hostname(hostname)
  
      def _default_display_name(self, instance_uuid):
@@ -796,7 +819,7 @@
  
      def _populate_instance_for_create(self, instance, image,
                                        index, security_groups, instance_type):
-@@ -2166,7 +2178,22 @@
+@@ -2166,7 +2176,22 @@
                                             migration,
                                             migration.source_compute,
                                             reservations)
@@ -805,7 +828,7 @@
 +            return
  
 +        try:
-+            fixed_ips = self.db.fixed_ip_get_by_instance(context, 
++            fixed_ips = self.db.fixed_ip_get_by_instance(context,
 +                                                         instance['uuid'])
 +            vm_ip = (fixed_ips[0])['address']
 +
@@ -819,6 +842,17 @@
      @staticmethod
      def _resize_quota_delta(context, new_instance_type,
                              old_instance_type, sense, compare):
+@@ -2304,7 +2329,9 @@
+         if not same_instance_type and new_instance_type.get('disabled'):
+             raise exception.FlavorNotFound(flavor_id=flavor_id)
+ 
+-        if same_instance_type and flavor_id:
++
++        if same_instance_type and flavor_id and self.cell_type != 'compute':
++
+             raise exception.CannotResizeToSameFlavor()
+ 
+         # ensure there is sufficient headroom for upsizes
 @@ -2338,7 +2365,12 @@
          instance.save(expected_task_state=None)
  
@@ -826,7 +860,7 @@
 -
 +
 +        ipservice = self.db.cern_netcluster_get(context, instance['host'])
-+        ignore_hosts = self.db.cern_ignore_hosts(context, 
++        ignore_hosts = self.db.cern_ignore_hosts(context,
 +                                                 ipservice['netcluster'])
 +        filter_properties['ignore_hosts'].extend(ignore_hosts)
 +
@@ -942,8 +976,8 @@
          metadata = self.db.instance_metadata_update(context, instance['uuid'],
                                           _metadata, True)
          instance['metadata'] = metadata
---- nova/compute/manager.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/compute/manager.py	2014-02-19 13:26:37.000000000 +0100
+--- nova/compute/manager.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/compute/manager.py	2014-03-12 09:10:57.000000000 +0100
 @@ -83,7 +83,10 @@
  from nova.virt import virtapi
  from nova import volume
@@ -979,7 +1013,7 @@
  LOG = logging.getLogger(__name__)
  
  get_notifier = functools.partial(notifier.get_notifier, service='compute')
-@@ -914,7 +924,40 @@
+@@ -920,7 +930,41 @@
                  raise exception.Base64Exception(path=path)
  
          return [_decode(f) for f in injected_files]
@@ -987,23 +1021,24 @@
 +    def _cern_ready(self, context, instance):
 +            if instance['hostname'] == "server-"+str(instance['uuid']):
 +                return
-+
+ 
 +            if not CONF.cern_landb:
 +                return
- 
++
 +            instance_hostname = str(instance['hostname'])
-+            meta = self.conductor_api.instance_metadata_get(context, 
++            meta = self.conductor_api.instance_metadata_get(context,
 +                                                            instance['uuid'])
 +            if ('cern-update-hostname' in meta.keys()\
-+                        and meta['cern-update-hostname'].lower() == 'true'):
++                        and meta['cern-update-hostname'].lower() == 'false'):
 +                return
 +
 +            if ('cern-services' in meta.keys()\
 +                and meta['cern-services'].lower() != 'false')\
 +                or ('cern-services' not in meta.keys()):
++                time.sleep(5)
 +                client = cern.ActiveDirectory()
 +                client.register(instance_hostname)
-+                
++
 +                wait_time = 0
 +                while(wait_time < CONF.landb_dns_timeout):
 +                    try:
@@ -1020,7 +1055,7 @@
      def _run_instance(self, context, request_spec,
                        filter_properties, requested_networks, injected_files,
                        admin_password, is_first_time, node, instance,
-@@ -1018,7 +1061,9 @@
+@@ -1024,7 +1068,9 @@
                  network_info = self._allocate_network(context, instance,
                          requested_networks, macs, security_groups,
                          dhcp_options)
@@ -1031,8 +1066,8 @@
                  self._instance_update(
                          context, instance['uuid'],
                          vm_state=vm_states.BUILDING,
---- nova/conductor/api.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/conductor/api.py	2014-01-23 22:38:18.000000000 +0100
+--- nova/conductor/api.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/conductor/api.py	2014-03-12 09:10:58.000000000 +0100
 @@ -72,7 +72,10 @@
                               columns_to_join=None):
          return self._manager.instance_get_by_uuid(context, instance_uuid,
@@ -1045,8 +1080,8 @@
      def instance_destroy(self, context, instance):
          return self._manager.instance_destroy(context, instance)
  
---- nova/conductor/manager.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/conductor/manager.py	2014-01-23 22:30:05.000000000 +0100
+--- nova/conductor/manager.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/conductor/manager.py	2014-03-12 09:10:59.000000000 +0100
 @@ -143,7 +143,12 @@
          return jsonutils.to_primitive(
              self.db.instance_get_by_uuid(context, instance_uuid,
@@ -1061,8 +1096,8 @@
      # NOTE(hanlind): This method can be removed in v2.0 of the RPC API.
      def instance_get_all(self, context):
          return jsonutils.to_primitive(self.db.instance_get_all(context))
---- nova/conductor/rpcapi.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/conductor/rpcapi.py	2014-01-23 22:37:05.000000000 +0100
+--- nova/conductor/rpcapi.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/conductor/rpcapi.py	2014-03-12 09:11:00.000000000 +0100
 @@ -152,7 +152,12 @@
              kwargs = {'instance_uuid': instance_uuid}
          cctxt = self.client.prepare(version=version)
@@ -1077,9 +1112,9 @@
      def migration_get_in_progress_by_host_and_node(self, context,
                                                     host, node):
          cctxt = self.client.prepare(version='1.31')
---- nova/db/api.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/db/api.py	2014-01-27 11:17:04.000000000 +0100
-@@ -1923,3 +1923,26 @@
+--- nova/db/api.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/db/api.py	2014-03-12 09:11:02.000000000 +0100
+@@ -1925,3 +1925,26 @@
      """
      return IMPL.archive_deleted_rows_for_table(context, tablename,
                                                 max_rows=max_rows)
@@ -1106,9 +1141,9 @@
 +    """Get all metadata values in all aggregates given a key."""
 +    return IMPL.aggregate_metadata_get_all_by_key(context, key)
 +
---- nova/db/sqlalchemy/api.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/db/sqlalchemy/api.py	2014-01-27 11:52:09.000000000 +0100
-@@ -5998,3 +5998,80 @@
+--- nova/db/sqlalchemy/api.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/db/sqlalchemy/api.py	2014-03-12 09:11:03.000000000 +0100
+@@ -6001,3 +6001,80 @@
          device.update(values)
          session.add(device)
      return device
@@ -1190,7 +1225,7 @@
 +    return metadata
 +
 --- nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	2014-01-27 12:21:11.000000000 +0100
++++ nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	2014-03-12 09:11:04.000000000 +0100
 @@ -0,0 +1,55 @@
 +# This is a placeholder for Grizzly backports.
 +# Do not use this number for new Havana work.  New Havana work starts after
@@ -1238,7 +1273,7 @@
 +        table.create_column(column_mac)
 +    except Exception:
 +        pass
-+    
++
 +    try:
 +        table.create_column(column_netcluster)
 +    except Exception:
@@ -1247,25 +1282,8 @@
 +def downgrade(migration_engine):
 +    pass
 +
---- nova/db/sqlalchemy/migrate_repo/versions/162_placeholder.py	2013-12-16 02:31:39.000000000 +0100
-+++ nova/db/sqlalchemy/migrate_repo/versions/162_placeholder.py	1970-01-01 01:00:00.000000000 +0100
-@@ -1,14 +0,0 @@
--# This is a placeholder for Grizzly backports.
--# Do not use this number for new Havana work.  New Havana work starts after
--# all the placeholders.
--#
--# See https://blueprints.launchpad.net/nova/+spec/backportable-db-migrations
--# http://lists.openstack.org/pipermail/openstack-dev/2013-March/006827.html
--
--
--def upgrade(migrate_engine):
--    pass
--
--
--def downgrade(migration_engine):
--    pass
---- nova/db/sqlalchemy/models.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/db/sqlalchemy/models.py	2014-01-27 13:41:33.000000000 +0100
+--- nova/db/sqlalchemy/models.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/db/sqlalchemy/models.py	2014-03-12 09:11:05.000000000 +0100
 @@ -865,7 +865,19 @@
                                  'FixedIp.instance_uuid == Instance.uuid,'
                                  'FixedIp.deleted == 0,'
@@ -1287,13 +1305,12 @@
  
  class FloatingIp(BASE, NovaBase):
      """Represents a floating ip that dynamically forwards to a fixed ip."""
---- nova/exception.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/exception.py	2014-02-20 19:31:30.000000000 +0100
-@@ -1462,3 +1462,45 @@
+--- nova/exception.py	2014-02-13 21:08:43.000000000 +0100
++++ nova/exception.py	2014-03-12 09:11:06.000000000 +0100
+@@ -1462,3 +1462,44 @@
  
  class KeyManagerError(NovaException):
      msg_fmt = _("key manager error: %(reason)s")
-+
 +
 +class CernProjectTargetCell(NovaException):
 +    msg_fmt = _("Failed to select available cell.")
@@ -1335,16 +1352,17 @@
 +    msg_fmt = _("Unable to connect to LanDB")
 +
 +
---- nova/network/linux_net.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/network/linux_net.py	2014-01-27 13:50:53.000000000 +0100
-@@ -396,6 +396,19 @@
+--- nova/network/linux_net.py	2014-02-13 21:08:44.000000000 +0100
++++ nova/network/linux_net.py	2014-03-12 09:11:07.000000000 +0100
+@@ -396,7 +396,18 @@
          # the snat chain.
          self.ipv4['nat'].add_chain('float-snat')
          self.ipv4['nat'].add_rule('snat', '-j $float-snat')
+-
 +
 +        self.ipv4['filter'].add_rule('INPUT',
 +                                     '-s %s -j ACCEPT' %(CONF.metadata_host))
-+        self.ipv4['filter'].add_rule('FORWARD', 
++        self.ipv4['filter'].add_rule('FORWARD',
 +                                     '-m pkttype --pkt-type broadcast -j ACCEPT')
 +        self.ipv4['nat'].add_rule('PREROUTING',
 +                                  '-s 0.0.0.0/0 -d 169.254.169.254/32 '
@@ -1353,12 +1371,11 @@
 +                                          (CONF.metadata_host,
 +                                           CONF.metadata_port))
 +
-+
- 
      def defer_apply_on(self):
          self.iptables_apply_deferred = True
---- nova/network/manager.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/network/manager.py	2014-02-20 19:19:18.000000000 +0100
+ 
+--- nova/network/manager.py	2014-02-13 21:08:44.000000000 +0100
++++ nova/network/manager.py	2014-03-12 09:11:08.000000000 +0100
 @@ -78,6 +78,13 @@
  from nova import quota
  from nova import servicegroup
@@ -1393,7 +1410,7 @@
  CONF.import_opt('use_ipv6', 'nova.netconf')
  CONF.import_opt('my_ip', 'nova.netconf')
  CONF.import_opt('network_topic', 'nova.network.rpcapi')
-@@ -1933,3 +1949,379 @@
+@@ -1933,3 +1949,383 @@
          """Number of reserved ips at the top of the range."""
          parent_reserved = super(VlanManager, self)._top_reserved_ips
          return parent_reserved + CONF.cnt_vpn_clients
@@ -1597,7 +1614,7 @@
 +        if vm_hostname.lower() != vm_display.lower():
 +            LOG.error(_("Hostname is not valid: %s - %s" % (vm_hostname.lower(), vm_display.lower())))
 +            raise exception.CernHostnameWrong()
-+        
++
 +        self._allocate_address(admin_context, instance_uuid, host, networks,
 +                               vm_hostname.lower())
 +
@@ -1609,12 +1626,12 @@
 +
 +        self._deallocate_address(context, address, host, teardown)
 +
-+    def _allocate_address(self, admin_context, instance_uuid, host, networks, 
++    def _allocate_address(self, admin_context, instance_uuid, host, networks,
 +                          vm_name):
 +        """Allocates instance address."""
 +
 +        ipservice =  self.db.cern_netcluster_get(admin_context, host)
-+        cern_address = self.db.cern_mac_ip_get(admin_context, 
++        cern_address = self.db.cern_mac_ip_get(admin_context,
 +                                               ipservice['netcluster'], host)
 +        vm_ip = cern_address['address']
 +        vm_mac = cern_address['mac']
@@ -1653,11 +1670,11 @@
 +        metadata = self.db.instance_metadata_get(admin_context, instance_uuid)
 +        device_name = client_landb.device_hostname(vm_ip)
 +
-+        client_landb.device_migrate(device_name, 
++        client_landb.device_migrate(device_name,
 +                             (host.lower()).replace('.cern.ch', ''))
 +
 +        if ('cern-update-hostname' in metadata.keys()\
-+                and metadata['cern-update-hostname'].lower() == 'true'):
++                and metadata['cern-update-hostname'].lower() == 'false'):
 +            landb_hostname = client_landb.device_hostname(vm_ip)
 +            update_dict = {}
 +            update_dict['display_name'] = landb_hostname.strip()
@@ -1669,14 +1686,16 @@
 +            vm_name = device_name
 +
 +        try:
-+            image_id = (self.db.instance_get_by_uuid(admin_context, 
++            image_id = (self.db.instance_get_by_uuid(admin_context,
 +                                                instance_uuid))['image_ref']
 +        except Exception as e:
-+            LOG.error(_("Cannot get image id - %s" % str(e)))
-+            raise exception.CernNetwork()
++            LOG.info(_("Cannot get image id for instance %s - %s" % (str(instance_uuid), str(e))))
 +
-+        image_service = nova.image.glance.get_default_image_service()
-+        image_metadata = image_service.show(admin_context, image_id)
++        if image_id:
++            image_service = nova.image.glance.get_default_image_service()
++            image_metadata = image_service.show(admin_context, image_id)
++        else:
++            image_metadata = {}
 +
 +        landb_operating_system = {'Name':'LINUX', 'Version': 'UNKNOWN'}
 +        if 'properties' in image_metadata.keys()\
@@ -1687,7 +1706,7 @@
 +        and 'server' in (image_metadata['properties']['os_version']).lower():
 +                    landb_operating_system = {'Name':'WINDOWS', 'Version': 'SERVER'}
 +
-+        user_name = self.db.instance_get_by_uuid(admin_context, 
++        user_name = self.db.instance_get_by_uuid(admin_context,
 +                                                 instance_uuid)["user_id"]
 +        person_id = client_xldap.user_exists(user_name)
 +        if not person_id:
@@ -1729,16 +1748,18 @@
 +            landb_update = True
 +            landb_description = metadata['landb-description']
 +
-+        client_landb.vm_update(device_name, 
-+                               new_device=vm_name, 
++        client_landb.vm_update(device_name,
++                               new_device=vm_name,
 +                               description=landb_description,
 +                               operating_system=landb_operating_system,
-+                               responsible_person=landb_responsible, 
++                               responsible_person=landb_responsible,
 +                               user_person=landb_mainuser)
 +
 +        if 'landb-alias' in metadata.keys():
 +            new_alias = [x.strip() for x in metadata['landb-alias'].split(',')]
 +            client_landb.alias_update(vm_name, new_alias)
++        else:
++            client_landb.alias_update(vm_name, [])
 +
 +
 +    def _deallocate_address(self, context, address, host, teardown):
@@ -1773,18 +1794,8 @@
 +        device_name = client_landb.device_hostname(address)
 +        client_landb.vm_delete(device_name)
 +
---- nova/scheduler/driver.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/scheduler/driver.py	2014-01-30 10:54:29.000000000 +0100
-@@ -38,6 +38,7 @@
- from nova.openstack.common import timeutils
- from nova import servicegroup
- 
-+
- LOG = logging.getLogger(__name__)
- 
- scheduler_driver_opts = [
---- nova/scheduler/filters/image_props_filter.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/scheduler/filters/image_props_filter.py	2014-01-30 10:54:24.000000000 +0100
+--- nova/scheduler/filters/image_props_filter.py	2014-02-13 21:08:44.000000000 +0100
++++ nova/scheduler/filters/image_props_filter.py	2014-03-12 09:11:09.000000000 +0100
 @@ -38,7 +38,9 @@
  
      def _instance_supported(self, host_state, image_props):
@@ -1797,8 +1808,8 @@
          checked_img_props = (img_arch, img_h_type, img_vm_mode)
  
 --- nova/scheduler/filters/project_to_aggregate_filter.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/scheduler/filters/project_to_aggregate_filter.py	2014-01-30 10:56:32.000000000 +0100
-@@ -0,0 +1,56 @@
++++ nova/scheduler/filters/project_to_aggregate_filter.py	2014-03-12 09:11:10.000000000 +0100
+@@ -0,0 +1,57 @@
 +# Copyright (c) 2011-2013 OpenStack Foundation
 +# All Rights Reserved.
 +#
@@ -1815,6 +1826,7 @@
 +#    under the License.
 +
 +from nova import db
++from nova.openstack.common.gettextutils import _
 +from nova.openstack.common import log as logging
 +from nova.scheduler import filters
 +
@@ -1855,8 +1867,8 @@
 +                return False
 +        return True
 +
---- nova/virt/firewall.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/virt/firewall.py	2014-02-05 15:13:16.000000000 +0100
+--- nova/virt/firewall.py	2014-02-13 21:08:44.000000000 +0100
++++ nova/virt/firewall.py	2014-03-12 09:11:11.000000000 +0100
 @@ -170,8 +170,12 @@
      def unfilter_instance(self, instance, network_info):
          if self.instances.pop(instance['id'], None):
@@ -1870,10 +1882,11 @@
              self.iptables.apply()
          else:
              LOG.info(_('Attempted to unfilter instance which is not '
-@@ -249,6 +253,16 @@
+@@ -249,14 +253,32 @@
                                                              network_info)
          self._add_filters('local', ipv4_rules, ipv6_rules)
          self._add_filters(chain_name, inst_ipv4_rules, inst_ipv6_rules)
+-
 +
 +        try:
 +            v4_subnets = self._get_subnets(network_info, 4)
@@ -1884,13 +1897,13 @@
 +            LOG.warn(_("Failed to add firewall rule. %s" % str(e)))
 +            pass
 +
- 
      def remove_filters_for_instance(self, instance):
          chain_name = self._instance_chain_name(instance)
-@@ -256,6 +270,16 @@
+ 
          self.iptables.ipv4['filter'].remove_chain(chain_name)
          if CONF.use_ipv6:
              self.iptables.ipv6['filter'].remove_chain(chain_name)
+-
 +
 +        network_info = self.network_infos[instance['id']]
 +        try:
@@ -1901,26 +1914,23 @@
 +        except Exception as e:
 +            LOG.warn(_("Cannot remove firewall rule. %s" % str(e)))
 +
- 
      @staticmethod
      def _security_group_chain_name(security_group_id):
---- nova/virt/libvirt/firewall.py	2013-12-16 02:31:47.000000000 +0100
-+++ nova/virt/libvirt/firewall.py	2014-02-20 22:04:55.000000000 +0100
-@@ -219,9 +219,10 @@
+         return 'nova-sg-%s' % (security_group_id,)
+--- nova/virt/libvirt/firewall.py	2014-02-13 21:08:44.000000000 +0100
++++ nova/virt/libvirt/firewall.py	2014-03-12 09:11:12.000000000 +0100
+@@ -219,6 +219,10 @@
          filter_set = ['no-mac-spoofing',
                        'no-ip-spoofing',
                        'no-arp-spoofing']
--        if CONF.use_ipv6:
--            self._define_filter(self.nova_no_nd_reflection_filter)
--            filter_set.append('nova-no-nd-reflection')
 +
 +        self._define_filter(self.nova_no_nd_reflection_filter)
 +        filter_set.append('nova-no-nd-reflection')
 +
-         self._define_filter(self._filter_container('nova-nodhcp', filter_set))
-         filter_set.append('allow-dhcp-server')
-         self._define_filter(self._filter_container('nova-base', filter_set))
-@@ -319,8 +320,11 @@
+         if CONF.use_ipv6:
+             self._define_filter(self.nova_no_nd_reflection_filter)
+             filter_set.append('nova-no-nd-reflection')
+@@ -319,8 +323,11 @@
          # Overriding base class method for applying nwfilter operation
          if self.instances.pop(instance['id'], None):
              # NOTE(vish): use the passed info instead of the stored info
@@ -1929,7 +1939,7 @@
 +            self.network_infos[instance['id']] = network_info
              self.remove_filters_for_instance(instance)
 +            self.network_infos.pop(instance['id'])
-+ 
++
              self.iptables.apply()
              self.nwfilter.unfilter_instance(instance, network_info)
          else:
