@@ -1,0 +1,14 @@
+diff --git a/websockify/websocket.py.orig b/websockify/websocket.py
+index 2475f99..d37fa71 100644
+--- a/websockify/websocket.py.orig
++++ b/websockify/websocket.py
+@@ -767,7 +767,8 @@ Sec-WebSocket-Accept: %s\r
+                     pid = err = 0
+                     child_count = 0
+
+-                    if multiprocessing and self.idle_timeout:
++                    if multiprocessing:
++                        # Collect zombie child processes
+                         child_count = len(multiprocessing.active_children())
+
+                     time_elapsed = time.time() - self.launch_time
