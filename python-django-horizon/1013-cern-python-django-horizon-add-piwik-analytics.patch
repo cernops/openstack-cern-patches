@@ -1,0 +1,21 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Mon, 07 Apr 2014 08:23:00 +0200
+Subject: [PATCH] CERN Add piwik analytics to dashboard
+---
+--- a/horizon/templates/base.html 2014-04-07 10:20:54.000000001 +0200
++++ b/horizon/templates/base.html 2014-04-07 10:21:24.000000001 +0200
+@@ -10,6 +10,7 @@
+     {% endblock %}
+     {% include "horizon/_conf.html" %}
+     {% include "horizon/client_side/_script_loader.html" %}
++    {% load piwik_tags %}
+   </head>
+   <body id="{% block body_id %}{% endblock %}">
+     {% block content %}
+@@ -34,5 +35,6 @@
+       {% include "horizon/_scripts.html" %}
+     {% endblock %}
+     <div id="modal_wrapper" />
++    {% tracking_code %}
+   </body>
+ </html>

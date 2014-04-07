@@ -1,6 +1,6 @@
 Name:       python-django-horizon
 Version:    2013.2.2
-Release:    1%{?dist}.4
+Release:    1%{?dist}.5
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -43,9 +43,10 @@ Patch1006: 1006-cern-python-django-horizon-remove-piecharts.patch
 Patch1007: 1007-cern-python-django-horizon-remove-password-panel.patch
 Patch1008: 1008-cern-python-django-horizon-css-fixes.patch
 Patch1009: 1009-cern-python-django-horizon-piechart-fixes.patch
-Patch1010: 1010-cern-python-django-horizon-add-maintenance-mode.patch
+Patch1010: 1010-cern-python-django-horizon-add-maintenance-piwik.patch
 Patch1011: 1011-cern-python-django-horizon-backport-bug1247056.patch
 Patch1012: 1012-cern-python-django-horizon-fix-piechart-ie9-ie10.patch
+Patch1013: 1013-cern-python-django-horizon-add-piwik-analytics.patch
 
 BuildArch:  noarch
 
@@ -66,6 +67,7 @@ Requires:   python-pbr
 
 # CERN Requirements
 Requires:   python-django-maintenancemode
+Requires:   python-django-piwik
 
 BuildRequires: python2-devel
 BuildRequires: python-setuptools
@@ -206,7 +208,9 @@ cp -p %{SOURCE4} .
 cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
 # dirty hack to make SECRET_KEY work:
 sed -i 's:^SECRET_KEY =.*:SECRET_KEY = "badcafe":' openstack_dashboard/local/local_settings.py
-%{__python} manage.py collectstatic --noinput 
+# disable piwik
+sed -i "s/'piwik'/#'piwik'/" openstack_dashboard/settings.py
+%{__python} manage.py collectstatic --noinput
 %{__python} manage.py compress 
 cp -a static/dashboard %{_buildir}
 
@@ -218,8 +222,9 @@ sphinx-1.0-build -b html doc/source html
 sphinx-build -b html doc/source html
 %endif
 
-# undo hack
+# undo hacks
 cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
+sed -i "s/#'piwik'/'piwik'/" openstack_dashboard/settings.py
 
 # Fix hidden-file-or-dir warnings
 rm -fr html/.doctrees html/.buildinfo
@@ -351,7 +356,10 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 %{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
-* Wed Apr 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.4
+* Mon Apr 07 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.5
+- add piwik analytics to django
+
+* Wed Mar 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.4
 - fix piecharts for IE9 and IE10 due to lack of support of HTML5 dataset
 
 * Fri Feb 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.3
