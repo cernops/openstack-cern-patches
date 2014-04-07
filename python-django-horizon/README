@@ -55,21 +55,32 @@ How to apply
    ...
 
 
-5) Add the patch in the %prep section after all the previous patches have been applied 
+5) Add the patch to disable piwik while retrieving static data after the build process
 
    ...
-   %prep
-   %setup -q -n horizon-%{version}
+   # compress css, js etc.
+   cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
+   # dirty hack to make SECRET_KEY work:
+   sed -i 's:^SECRET_KEY =.*:SECRET_KEY = "badcafe":' openstack_dashboard/local/local_settings.py
+   # disable piwik
+   sed -i "s/'piwik'/#'piwik'/" openstack_dashboard/settings.py
+   %{__python} manage.py collectstatic --noinput
+   %{__python} manage.py compress
+   cp -a static/dashboard %{_buildir}
 
-   %patch0001 -p1
-   %patch0002 -p1
-   %patch0003 -p1
-   %patch4 -p1
-   %patch5 -p1
-   %patch1000 -p0
-   %patch1001 -p0
+   # build docs
+   export PYTHONPATH="$( pwd ):$PYTHONPATH"
+   %if 0%{?rhel}==6
+   sphinx-1.0-build -b html doc/source html
+   %else
+   sphinx-build -b html doc/source html
+   %endif
+
+   # undo hacks
+   cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
+   sed -i "s/#'piwik'/'piwik'/" openstack_dashboard/settings.py
    ...
-  
+
 
 6) Add a relevant entry on the %changelog section at the beginning. By convention we append ai6.n
 
