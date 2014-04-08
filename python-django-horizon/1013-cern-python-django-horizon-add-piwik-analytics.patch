@@ -19,3 +19,37 @@ Subject: [PATCH] CERN Add piwik analytics to dashboard
 +    {% tracking_code %}
    </body>
  </html>
+--- a/horizon/templates/splash.html	2014-04-08 10:08:40.000000001 +0200
++++ b/horizon/templates/splash.html	2014-04-08 10:09:47.000000001 +0200
+@@ -6,6 +6,7 @@
+     <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+     <title>{% trans "Login" %} - {% site_branding %}</title>
+     {% include "_stylesheets.html" %}
++    {% load piwik_tags %}
+   </head>
+   <body id="splash">
+     <div class="container">
+@@ -13,5 +14,6 @@
+         {% include 'auth/_login.html' %}
+       </div>
+     </div>
++    {% tracking_code %}
+   </body>
+ </html>
+--- a/openstack_dashboard/templates/500.html	2014-04-08 10:15:03.000000001 +0200
++++ b/openstack_dashboard/templates/500.html	2014-04-08 10:15:43.000000001 +0200
+@@ -57,6 +57,7 @@
+     }
+     </style>
+     {% endblock %}
++    {% load piwik_tags %}
+   </head>
+   <body id="{% block body_id %}{% endblock %}">
+     {% block page_header %}{% endblock %}
+@@ -78,5 +79,6 @@
+     {% endblock %}
+     {% block footer %}{% endblock %}
+     {% block js %}{% endblock %}
++    {% tracking_code %}
+   </body>
+ </html>

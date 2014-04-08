@@ -1,6 +1,6 @@
 Name:       python-django-horizon
 Version:    2013.2.2
-Release:    1%{?dist}.5
+Release:    1%{?dist}.6
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -356,6 +356,9 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 %{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
+* Tue Apr 08 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.6
+- add extra templates to piwik
+
 * Mon Apr 07 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.5
 - add piwik analytics to django
 
