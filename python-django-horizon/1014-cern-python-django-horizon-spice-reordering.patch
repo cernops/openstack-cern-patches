@@ -1,0 +1,23 @@
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Thu, 22 May 2014 13:02:00 +0200
+Subject: [PATCH] CERN Reorder SPICE console
+---
+--- a/openstack_dashboard/dashboards/project/instances/tabs.py
++++ b/openstack_dashboard/dashboards/project/instances/tabs.py
+@@ -65,14 +65,14 @@ class ConsoleTab(tabs.Tab):
+         console_type = getattr(settings, 'CONSOLE_TYPE', 'AUTO')
+         if console_type == 'AUTO':
+             try:
+-                console = api.nova.server_vnc_console(request, instance.id)
++                console = api.nova.server_spice_console(request, instance.id)
+                 console_url = "%s&title=%s(%s)" % (
+                     console.url,
+                     getattr(instance, "name", ""),
+                     instance.id)
+             except Exception:
+                 try:
+-                    console = api.nova.server_spice_console(request,
++                    console = api.nova.server_vnc_console(request,
+                                                             instance.id)
+                     console_url = "%s&title=%s(%s)" % (
+                         console.url,

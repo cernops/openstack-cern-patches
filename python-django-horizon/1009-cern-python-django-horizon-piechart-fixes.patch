@@ -26,7 +26,7 @@ Subject: [PATCH] CERN Add piecharts for volumes usage in overview
        {% blocktrans with used=usage.limits.totalRAMUsed|mb_float_format available=usage.limits.maxTotalRAMSize|mb_float_format %}Used <span> {{ used }} </span> of <span> {{ available }} </span>{% endblocktrans %}
      </strong>
      </div>
-+  {% if usage.limits.totalVolumesUsed %}
++  {% if usage.limits.totalVolumesUsed >= 0 %}
 +    <div class="d3_quota_bar">
 +      <div class="d3_pie_chart" data-used="{% widthratio usage.limits.totalVolumesUsed usage.limits.maxTotalVolumes 100 %}"></div>
 +      <strong>{% trans "Available Volumes" %} <br />

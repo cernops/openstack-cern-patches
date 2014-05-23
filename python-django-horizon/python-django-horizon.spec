@@ -1,6 +1,6 @@
 Name:       python-django-horizon
-Version:    2013.2.2
-Release:    1%{?dist}.6
+Version:    2013.2.3
+Release:    1%{?dist}.3
 Summary:    Django application for talking to Openstack
 
 Group:      Development/Libraries
@@ -19,12 +19,10 @@ Source10:   rhfavicon.ico
 Source11:   rh-logo.png
 
 # CERN sources
-Source1001: openstack.ps.template
-Source1002: windows.png
-Source1003: 503.html
+Source1001: windows.png
 
 #
-# patches_base=2013.2.2
+# patches_base=2013.2.3
 #
 Patch0001: 0001-Don-t-access-the-net-while-building-docs.patch
 Patch0002: 0002-disable-debug-move-web-root.patch
@@ -32,6 +30,7 @@ Patch0003: 0003-change-lockfile-location-to-tmp-and-also-add-localho.patch
 Patch0004: 0004-Add-a-customization-module-based-on-RHOS.patch
 Patch0005: 0005-move-RBAC-policy-files-and-checks-to-etc-openstack-d.patch
 Patch0006: 0006-move-SECRET_KEYSTORE-to-var-lib-openstack-dashboard.patch
+Patch0007: 0007-Introduces-escaping-in-Horizon-Orchestration.patch
 
 # CERN Patches
 Patch1001: 1001-cern-python-django-horizon-disable-floating-ips-security-groups.patch
@@ -47,6 +46,8 @@ Patch1010: 1010-cern-python-django-horizon-add-maintenance-piwik.patch
 Patch1011: 1011-cern-python-django-horizon-backport-bug1247056.patch
 Patch1012: 1012-cern-python-django-horizon-fix-piechart-ie9-ie10.patch
 Patch1013: 1013-cern-python-django-horizon-add-piwik-analytics.patch
+Patch1014: 1014-cern-python-django-horizon-spice-reordering.patch
+Patch1015: 1015-cern-python-django-horizon-enable-rdp-console.patch
 
 BuildArch:  noarch
 
@@ -185,7 +186,6 @@ git add .
 git commit -a -q -m "%{version} baseline"
 git am %{patches}
 
-
 # remove unnecessary .po files
 find . -name "django*.po" -exec rm -f '{}' \;
 
@@ -201,6 +201,9 @@ cp %{SOURCE11} openstack_dashboard_theme/static/dashboard/img
 # drop config snippet
 cp -p %{SOURCE4} .
 
+#Copy windows powershell image
+cp %{SOURCE1001} openstack_dashboard/static/bootstrap/img
+
 %build
 %{__python} setup.py build
 
@@ -210,7 +213,7 @@ cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local
 sed -i 's:^SECRET_KEY =.*:SECRET_KEY = "badcafe":' openstack_dashboard/local/local_settings.py
 # disable piwik
 sed -i "s/'piwik'/#'piwik'/" openstack_dashboard/settings.py
-%{__python} manage.py collectstatic --noinput
+%{__python} manage.py collectstatic --noinput 
 %{__python} manage.py compress 
 cp -a static/dashboard %{_buildir}
 
@@ -222,7 +225,7 @@ sphinx-1.0-build -b html doc/source html
 sphinx-build -b html doc/source html
 %endif
 
-# undo hacks
+# undo hack
 cp openstack_dashboard/local/local_settings.py.example openstack_dashboard/local/local_settings.py
 sed -i "s/#'piwik'/'piwik'/" openstack_dashboard/settings.py
 
@@ -286,11 +289,6 @@ mkdir -p %{buildroot}%{_datadir}/openstack-dashboard/static
 cp -a openstack_dashboard/static/* %{buildroot}%{_datadir}/openstack-dashboard/static
 cp -a horizon/static/* %{buildroot}%{_datadir}/openstack-dashboard/static 
 cp -a static/* %{buildroot}%{_datadir}/openstack-dashboard/static
-
-#Copy windows powershell actions
-cp -a %{SOURCE1001} %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/dashboards/project/access_and_security/templates/access_and_security/api_access
-cp -a %{SOURCE1002} %{buildroot}%{_datadir}/openstack-dashboard/static/bootstrap/img
-cp -a %{SOURCE1003} %{buildroot}%{_datadir}/openstack-dashboard/openstack_dashboard/templates
 
 # create /var/run/openstack-dashboard/ and own it
 mkdir -p %{buildroot}%{_sharedstatedir}/openstack-dashboard
@@ -356,22 +354,18 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 %{_datadir}/openstack-dashboard/openstack_dashboard_theme
 
 %changelog
-* Tue Apr 08 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.6
-- add extra templates to piwik
+* Fri May 23 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.3-1.slc6.3
+- refactor CERN patches
 
-* Mon Apr 07 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.5
+* Thu May 22 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.3-1.slc6.2
+- add spice reordering
+- add rdp console patch
+
+* Tue May 20 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.3-1.slc6.1
 - add piwik analytics to django
-
-* Wed Mar 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.4
 - fix piecharts for IE9 and IE10 due to lack of support of HTML5 dataset
-
-* Fri Feb 26 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.3
 - backport bug1247056 too many novaclient calls
-
-* Fri Feb 21 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.2
 - add maintenance mode to django
-
-* Fri Feb 21 2014 Jose Castro Leon <jose.castro.leon@cern.ch> - 2013.2.2-1.slc6.1
 - Remove line in full pie chart
 - Include Volume quotas in project overview
 - disable floating IP panel and actions
@@ -383,6 +377,10 @@ mkdir -p %{buildroot}%{_var}/log/horizon
 - Add name field in api.nova.NovaUsage
 - remove change password panel in settings
 - increase size of datepicker due to rendering issues on Mac+Firefox
+
+* Thu Apr 10 2014 Matthias Runge <mrunge@redhat.com> - 2013.2.3-1
+- rebase to 2013.2.3
+- fix CVE-2014-0157 (rhbz#1085826)
 
 * Fri Feb 14 2014 Matthias Runge <mrunge@redhat.com> - 2013.2.2-1
 - rebase to 2013.2.2

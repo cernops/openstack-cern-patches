@@ -23,15 +23,3 @@ index e30e56f..8d9845d 100644
  
      has_more_data = False
      if paginate and len(servers) > page_size:
-@@ -670,8 +671,9 @@ def service_list(request):
- 
- def aggregate_list(request):
-     result = []
--    for aggregate in novaclient(request).aggregates.list():
--        result.append(novaclient(request).aggregates.get_details(aggregate.id))
-+    c = novaclient(request)
-+    for aggregate in c.aggregates.list():
-+        result.append(c.aggregates.get_details(aggregate.id))
- 
-     return result
- 
