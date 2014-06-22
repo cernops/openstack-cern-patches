@@ -1,5 +1,5 @@
---- nova/api/openstack/compute/servers.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/api/openstack/compute/servers.py	2014-03-12 09:10:49.000000000 +0100
+--- nova/api/openstack/compute/servers.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/api/openstack/compute/servers.py 2014-06-08 23:44:36.000000000 +0200
 @@ -39,7 +39,10 @@
  from nova.openstack.common import uuidutils
  from nova import policy
@@ -131,8 +131,8 @@
          if 'accessIPv4' in body['server']:
              access_ipv4 = body['server']['accessIPv4']
              if access_ipv4:
---- nova/cells/filters/project_target_cell.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/cells/filters/project_target_cell.py	2014-03-12 09:10:50.000000000 +0100
+--- nova/cells/filters/project_target_cell.py 1970-01-01 01:00:00.000000000 +0100
++++ nova/cells/filters/project_target_cell.py 2014-06-09 10:42:05.000000000 +0200
 @@ -0,0 +1,89 @@
 +# Copyright (c) 2014 CERN
 +# All Rights Reserved.
@@ -223,8 +223,8 @@
 +        predicate = versionpredicate.VersionPredicate(
 +                             'prop (%s)' % version_requires)
 +        return predicate.satisfied_by(version)
---- nova/cells/messaging.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/cells/messaging.py	2014-03-12 09:10:51.000000000 +0100
+--- nova/cells/messaging.py   2014-04-03 20:49:46.000000000 +0200
++++ nova/cells/messaging.py   2014-06-09 10:48:27.000000000 +0200
 @@ -49,7 +49,9 @@
  from nova.openstack.common import timeutils
  from nova.openstack.common import uuidutils
@@ -265,8 +265,8 @@
              try:
                  self.db.instance_info_cache_update(
                          message.ctxt, instance_uuid, info_cache)
---- nova/cells/scheduler.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/cells/scheduler.py	2014-03-12 09:10:53.000000000 +0100
+--- nova/cells/scheduler.py   2014-04-03 20:49:46.000000000 +0200
++++ nova/cells/scheduler.py   2014-06-09 10:56:46.000000000 +0200
 @@ -84,27 +84,29 @@
  
      def _create_instances_here(self, ctxt, instance_uuids, instance_properties,
@@ -335,9 +335,9 @@
          filter_properties = build_inst_kwargs['filter_properties']
          instance_type = filter_properties['instance_type']
          image = build_inst_kwargs['image']
---- nova/cern.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/cern.py	2014-03-12 09:10:54.000000000 +0100
-@@ -0,0 +1,333 @@
+--- nova/cern.py  1970-01-01 01:00:00.000000000 +0100
++++ nova/cern.py  2014-06-09 18:17:29.000000000 +0200
+@@ -0,0 +1,334 @@
 +# Copyright (c) 2014 CERN
 +# All Rights Reserved.
 +#
@@ -481,7 +481,7 @@
 +                else:
 +                    break
 +
-+        os = {'Name': 'LINUX',
++        os = {'Name': 'UNKNOWN',
 +              'Version': 'UNKNOWN'}
 +
 +        responsible = {'FirstName':'E-GROUP',
@@ -517,6 +517,7 @@
 +            device = (self.client.service.searchDevice({'IPAddress':address}))[0]
 +        except Exception as e:
 +            LOG.error(_("Cannot find device with IP: %s" % str(e)))
++            raise exception.CernInvalidHostname('')
 +        return device
 +
 +
@@ -671,8 +672,8 @@
 +            LOG.error(_("Cannot check if VM is in AD. %s" % str(e)))
 +            raise exception.CernActiveDirectory()
 +
---- nova/cmd/manage.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/cmd/manage.py	2014-03-12 09:10:55.000000000 +0100
+--- nova/cmd/manage.py    2014-04-03 20:49:46.000000000 +0200
++++ nova/cmd/manage.py    2014-06-09 11:00:16.000000000 +0200
 @@ -1239,7 +1239,82 @@
                      transport['port'], transport['virtual_host']))
          print(fmt % ('-' * 3, '-' * 10, '-' * 6, '-' * 10, '-' * 15,
@@ -767,8 +768,8 @@
  }
  
  
---- nova/compute/api.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/compute/api.py	2014-03-12 09:10:56.000000000 +0100
+--- nova/compute/api.py   2014-04-03 20:49:46.000000000 +0200
++++ nova/compute/api.py   2014-06-09 11:12:28.000000000 +0200
 @@ -72,7 +72,9 @@
  from nova import servicegroup
  from nova import utils
@@ -842,10 +843,11 @@
      @staticmethod
      def _resize_quota_delta(context, new_instance_type,
                              old_instance_type, sense, compare):
-@@ -2304,7 +2329,9 @@
+@@ -2303,8 +2328,9 @@
+         # when Ops is migrating off of a failed host.
          if not same_instance_type and new_instance_type.get('disabled'):
              raise exception.FlavorNotFound(flavor_id=flavor_id)
- 
+-
 -        if same_instance_type and flavor_id:
 +
 +        if same_instance_type and flavor_id and self.cell_type != 'compute':
@@ -853,7 +855,7 @@
              raise exception.CannotResizeToSameFlavor()
  
          # ensure there is sufficient headroom for upsizes
-@@ -2338,7 +2365,12 @@
+@@ -2338,7 +2364,12 @@
          instance.save(expected_task_state=None)
  
          filter_properties = {'ignore_hosts': []}
@@ -867,7 +869,7 @@
          if not CONF.allow_resize_to_same_host:
              filter_properties['ignore_hosts'].append(instance['host'])
  
-@@ -2825,6 +2857,50 @@
+@@ -2825,6 +2856,50 @@
                            task_state=None)
      def delete_instance_metadata(self, context, instance, key):
          """Delete the given metadata item from an instance."""
@@ -918,7 +920,7 @@
          self.db.instance_metadata_delete(context, instance['uuid'], key)
          instance['metadata'] = {}
          notifications.send_update(context, instance, instance)
-@@ -2853,6 +2929,57 @@
+@@ -2853,6 +2928,57 @@
              _metadata.update(metadata)
  
          self._check_metadata_properties_quota(context, _metadata)
@@ -976,8 +978,8 @@
          metadata = self.db.instance_metadata_update(context, instance['uuid'],
                                           _metadata, True)
          instance['metadata'] = metadata
---- nova/compute/manager.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/compute/manager.py	2014-03-12 09:10:57.000000000 +0100
+--- nova/compute/manager.py   2014-04-03 20:49:46.000000000 +0200
++++ nova/compute/manager.py   2014-06-09 11:16:32.000000000 +0200
 @@ -83,7 +83,10 @@
  from nova.virt import virtapi
  from nova import volume
@@ -1066,8 +1068,8 @@
                  self._instance_update(
                          context, instance['uuid'],
                          vm_state=vm_states.BUILDING,
---- nova/conductor/api.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/conductor/api.py	2014-03-12 09:10:58.000000000 +0100
+--- nova/conductor/api.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/conductor/api.py 2014-06-09 11:18:18.000000000 +0200
 @@ -72,7 +72,10 @@
                               columns_to_join=None):
          return self._manager.instance_get_by_uuid(context, instance_uuid,
@@ -1080,8 +1082,8 @@
      def instance_destroy(self, context, instance):
          return self._manager.instance_destroy(context, instance)
  
---- nova/conductor/manager.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/conductor/manager.py	2014-03-12 09:10:59.000000000 +0100
+--- nova/conductor/manager.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/conductor/manager.py 2014-06-09 11:19:32.000000000 +0200
 @@ -143,7 +143,12 @@
          return jsonutils.to_primitive(
              self.db.instance_get_by_uuid(context, instance_uuid,
@@ -1096,8 +1098,8 @@
      # NOTE(hanlind): This method can be removed in v2.0 of the RPC API.
      def instance_get_all(self, context):
          return jsonutils.to_primitive(self.db.instance_get_all(context))
---- nova/conductor/rpcapi.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/conductor/rpcapi.py	2014-03-12 09:11:00.000000000 +0100
+--- nova/conductor/rpcapi.py  2014-04-03 20:49:46.000000000 +0200
++++ nova/conductor/rpcapi.py  2014-06-09 11:20:42.000000000 +0200
 @@ -152,7 +152,12 @@
              kwargs = {'instance_uuid': instance_uuid}
          cctxt = self.client.prepare(version=version)
@@ -1112,8 +1114,8 @@
      def migration_get_in_progress_by_host_and_node(self, context,
                                                     host, node):
          cctxt = self.client.prepare(version='1.31')
---- nova/db/api.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/db/api.py	2014-03-12 09:11:02.000000000 +0100
+--- nova/db/api.py    2014-04-03 20:49:46.000000000 +0200
++++ nova/db/api.py    2014-06-09 11:22:06.000000000 +0200
 @@ -1925,3 +1925,26 @@
      """
      return IMPL.archive_deleted_rows_for_table(context, tablename,
@@ -1141,9 +1143,9 @@
 +    """Get all metadata values in all aggregates given a key."""
 +    return IMPL.aggregate_metadata_get_all_by_key(context, key)
 +
---- nova/db/sqlalchemy/api.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/db/sqlalchemy/api.py	2014-03-12 09:11:03.000000000 +0100
-@@ -6001,3 +6001,80 @@
+--- nova/db/sqlalchemy/api.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/db/sqlalchemy/api.py 2014-06-09 11:23:56.000000000 +0200
+@@ -6004,3 +6004,80 @@
          device.update(values)
          session.add(device)
      return device
@@ -1224,8 +1226,8 @@
 +                metadata[kv['key']].add(kv['value'])
 +    return metadata
 +
---- nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py	2014-03-12 09:11:04.000000000 +0100
+--- nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py  1970-01-01 01:00:00.000000000 +0100
++++ nova/db/sqlalchemy/migrate_repo/versions/162_cern_network.py  2014-06-09 11:26:08.000000000 +0200
 @@ -0,0 +1,55 @@
 +# This is a placeholder for Grizzly backports.
 +# Do not use this number for new Havana work.  New Havana work starts after
@@ -1282,8 +1284,25 @@
 +def downgrade(migration_engine):
 +    pass
 +
---- nova/db/sqlalchemy/models.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/db/sqlalchemy/models.py	2014-03-12 09:11:05.000000000 +0100
+--- nova/db/sqlalchemy/migrate_repo/versions/162_placeholder.py   2014-04-03 20:49:46.000000000 +0200
++++ nova/db/sqlalchemy/migrate_repo/versions/162_placeholder.py   1970-01-01 01:00:00.000000000 +0100
+@@ -1,14 +0,0 @@
+-# This is a placeholder for Grizzly backports.
+-# Do not use this number for new Havana work.  New Havana work starts after
+-# all the placeholders.
+-#
+-# See https://blueprints.launchpad.net/nova/+spec/backportable-db-migrations
+-# http://lists.openstack.org/pipermail/openstack-dev/2013-March/006827.html
+-
+-
+-def upgrade(migrate_engine):
+-    pass
+-
+-
+-def downgrade(migration_engine):
+-    pass
+--- nova/db/sqlalchemy/models.py  2014-04-03 20:49:46.000000000 +0200
++++ nova/db/sqlalchemy/models.py  2014-06-09 11:27:15.000000000 +0200
 @@ -865,7 +865,19 @@
                                  'FixedIp.instance_uuid == Instance.uuid,'
                                  'FixedIp.deleted == 0,'
@@ -1305,12 +1324,13 @@
  
  class FloatingIp(BASE, NovaBase):
      """Represents a floating ip that dynamically forwards to a fixed ip."""
---- nova/exception.py	2014-02-13 21:08:43.000000000 +0100
-+++ nova/exception.py	2014-03-12 09:11:06.000000000 +0100
-@@ -1462,3 +1462,44 @@
+--- nova/exception.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/exception.py 2014-06-09 11:36:38.000000000 +0200
+@@ -1475,3 +1475,45 @@
  
  class KeyManagerError(NovaException):
      msg_fmt = _("key manager error: %(reason)s")
++
 +
 +class CernProjectTargetCell(NovaException):
 +    msg_fmt = _("Failed to select available cell.")
@@ -1352,8 +1372,8 @@
 +    msg_fmt = _("Unable to connect to LanDB")
 +
 +
---- nova/network/linux_net.py	2014-02-13 21:08:44.000000000 +0100
-+++ nova/network/linux_net.py	2014-03-12 09:11:07.000000000 +0100
+--- nova/network/linux_net.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/network/linux_net.py 2014-06-09 11:38:03.000000000 +0200
 @@ -396,7 +396,18 @@
          # the snat chain.
          self.ipv4['nat'].add_chain('float-snat')
@@ -1374,8 +1394,8 @@
      def defer_apply_on(self):
          self.iptables_apply_deferred = True
  
---- nova/network/manager.py	2014-02-13 21:08:44.000000000 +0100
-+++ nova/network/manager.py	2014-03-12 09:11:08.000000000 +0100
+--- nova/network/manager.py   2014-04-03 20:49:46.000000000 +0200
++++ nova/network/manager.py   2014-06-09 18:11:43.000000000 +0200
 @@ -78,6 +78,13 @@
  from nova import quota
  from nova import servicegroup
@@ -1410,7 +1430,7 @@
  CONF.import_opt('use_ipv6', 'nova.netconf')
  CONF.import_opt('my_ip', 'nova.netconf')
  CONF.import_opt('network_topic', 'nova.network.rpcapi')
-@@ -1933,3 +1949,383 @@
+@@ -1933,3 +1949,390 @@
          """Number of reserved ips at the top of the range."""
          parent_reserved = super(VlanManager, self)._top_reserved_ips
          return parent_reserved + CONF.cnt_vpn_clients
@@ -1546,7 +1566,7 @@
 +                    primary_service = (client_landb.getServiceInfo(srv)).\
 +                                        Primary.__str__()
 +                    continue
-+                if primary_service != (client.service.getServiceInfo(srv)).\
++                if primary_service != (client_landb.getServiceInfo(srv)).\
 +                                        Primary.__str__():
 +                    LOG.error(_("Network cluster has different primary "
 +                                 "services"))
@@ -1631,23 +1651,30 @@
 +        """Allocates instance address."""
 +
 +        ipservice =  self.db.cern_netcluster_get(admin_context, host)
-+        cern_address = self.db.cern_mac_ip_get(admin_context,
-+                                               ipservice['netcluster'], host)
-+        vm_ip = cern_address['address']
-+        vm_mac = cern_address['mac']
-+        network = networks[0]
 +
-+        LOG.info(_("Selected IP |%s| and MAC |%s| for instance |%s| "
-+                   "on host |%s|" % (vm_ip, vm_mac, instance_uuid, host)))
++        for i in range(20):
++            cern_address = self.db.cern_mac_ip_get(admin_context,
++                                                 ipservice['netcluster'], host)
++            vm_ip = cern_address['address']
++            vm_mac = cern_address['mac']
++            network = networks[0]
 +
-+        vif = {'address': vm_mac,
-+               'instance_uuid': instance_uuid,
-+               'network_id': network['id'],
-+               'uuid': str(str(uuid.uuid4()))}
++            LOG.info(_("Selected IP |%s| and MAC |%s| for instance |%s| "
++                       "on host |%s|" % (vm_ip, vm_mac, instance_uuid, host)))
 +
-+        try:
-+            self.db.virtual_interface_create(admin_context, vif)
-+        except Exception as e:
++            vif = {'address': vm_mac,
++                   'instance_uuid': instance_uuid,
++                   'network_id': network['id'],
++                   'uuid': str(str(uuid.uuid4()))}
++
++            try:
++                self.db.virtual_interface_create(admin_context, vif)
++            except Exception as e:
++                LOG.info(_("IP |%s| and MAC |%s| for instance |%s| was already "
++                "reserved. Selecting other." % (vm_ip, vm_mac, instance_uuid)))
++                continue
++            break
++        else:
 +            raise exception.VirtualInterfaceMacAddressException()
 +
 +        get_vif = self.db.virtual_interface_get_by_instance_and_network
@@ -1794,21 +1821,21 @@
 +        device_name = client_landb.device_hostname(address)
 +        client_landb.vm_delete(device_name)
 +
---- nova/scheduler/filters/image_props_filter.py	2014-02-13 21:08:44.000000000 +0100
-+++ nova/scheduler/filters/image_props_filter.py	2014-03-12 09:11:09.000000000 +0100
+--- nova/scheduler/filters/image_props_filter.py  2014-04-03 20:49:46.000000000 +0200
++++ nova/scheduler/filters/image_props_filter.py  2014-06-09 11:43:24.000000000 +0200
 @@ -38,7 +38,9 @@
  
      def _instance_supported(self, host_state, image_props):
          img_arch = image_props.get('architecture', None)
 -        img_h_type = image_props.get('hypervisor_type', None)
-+
++# CERN
 +        img_h_type = image_props.get('hypervisor_type', 'qemu')
-+
++# CERN
          img_vm_mode = image_props.get('vm_mode', None)
          checked_img_props = (img_arch, img_h_type, img_vm_mode)
  
---- nova/scheduler/filters/project_to_aggregate_filter.py	1970-01-01 01:00:00.000000000 +0100
-+++ nova/scheduler/filters/project_to_aggregate_filter.py	2014-03-12 09:11:10.000000000 +0100
+--- nova/scheduler/filters/project_to_aggregate_filter.py 1970-01-01 01:00:00.000000000 +0100
++++ nova/scheduler/filters/project_to_aggregate_filter.py 2014-06-09 11:45:09.000000000 +0200
 @@ -0,0 +1,57 @@
 +# Copyright (c) 2011-2013 OpenStack Foundation
 +# All Rights Reserved.
@@ -1867,8 +1894,8 @@
 +                return False
 +        return True
 +
---- nova/virt/firewall.py	2014-02-13 21:08:44.000000000 +0100
-+++ nova/virt/firewall.py	2014-03-12 09:11:11.000000000 +0100
+--- nova/virt/firewall.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/virt/firewall.py 2014-06-09 11:49:12.000000000 +0200
 @@ -170,8 +170,12 @@
      def unfilter_instance(self, instance, network_info):
          if self.instances.pop(instance['id'], None):
@@ -1917,8 +1944,8 @@
      @staticmethod
      def _security_group_chain_name(security_group_id):
          return 'nova-sg-%s' % (security_group_id,)
---- nova/virt/libvirt/firewall.py	2014-02-13 21:08:44.000000000 +0100
-+++ nova/virt/libvirt/firewall.py	2014-03-12 09:11:12.000000000 +0100
+--- nova/virt/libvirt/firewall.py 2014-04-03 20:49:46.000000000 +0200
++++ nova/virt/libvirt/firewall.py 2014-06-09 11:51:56.000000000 +0200
 @@ -219,6 +219,10 @@
          filter_set = ['no-mac-spoofing',
                        'no-ip-spoofing',

@@ -1,8 +1,8 @@
 %global with_doc %{!?_without_doc:1}%{?_without_doc:0}
 
 Name:             openstack-nova
-Version:          2013.2.2
-Release:          1%{?dist}.1
+Version:          2013.2.3
+Release:          1%{?dist}.2
 Summary:          OpenStack Compute (nova)
 
 Group:            Applications/System
@@ -50,7 +50,7 @@ Source22:         nova-ifc-template
 Source30:         openstack-nova-novncproxy.sysconfig
 
 #
-# patches_base=2013.2.2
+# patches_base=2013.2.3
 #
 Patch0001: 0001-Ensure-we-don-t-access-the-net-when-building-docs.patch
 Patch0002: 0002-remove-runtime-dep-on-python-pbr.patch
@@ -335,7 +335,7 @@ Group:            Applications/System
 
 Requires:         openstack-nova-common = %{version}-%{release}
 Requires:         novnc
-Requires: 	  python-websockify
+Requires:     python-websockify
 
 
 %description novncproxy
@@ -933,6 +933,18 @@ fi
 %endif
 
 %changelog
+* Thu Jun 19 2014 Belmiro Moreira <belmiro.moreira@cern.ch> - 2013.2.3-1-2
+- Fix cell scheduler patch
+
+* Mon Jun 09 2014 Belmiro Moreira <belmiro.moreira@cern.ch> - 2013.2.3-1-1
+- CERN patches for 2013.2.3
+- Deleted instance without OS in LanDB
+- Fix MAC concurrency allocation
+- Raise exception when device hostname not in LanDB 
+
+* Fri Apr 04 2014 Xavier Queralt <xqueralt@redhat.com> - 2013.2.3-1
+- Update to stable/havana 2013.2.3 release
+
 * Mon Mar 12 2014 Belmiro Moreira <belmiro.moreira@cern.ch> - 2013.2.2-1-1
 - CERN patches for 2013.2.2
 - backport bug 1243816
