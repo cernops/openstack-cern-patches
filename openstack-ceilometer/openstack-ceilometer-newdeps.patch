@@ -1,10 +1,7 @@
-diff -Naur ceilometer-2013.1.g3.orig/ceilometer/__init__.py ceilometer-2013.1.g3/ceilometer/__init__.py
---- ceilometer-2013.1.g3.orig/ceilometer/__init__.py	2013-04-08 09:54:04.545469160 +0000
-+++ ceilometer-2013.1.g3/ceilometer/__init__.py	2013-04-08 10:01:12.306302227 +0000
-@@ -14,6 +14,28 @@
- # under the License.
- #
- 
+diff -Naur ceilometer-2014.1.b2.orig/ceilometer/__init__.py ceilometer-2014.1.b2/ceilometer/__init__.py
+--- ceilometer-2014.1.b2.orig/ceilometer/__init__.py	2014-01-23 14:55:44.000000000 +0000
++++ ceilometer-2014.1.b2/ceilometer/__init__.py	2014-01-27 15:03:39.691353920 +0000
+@@ -0,0 +1,21 @@
 +import sys
 +import pkg_resources
 +
@@ -26,25 +23,3 @@ diff -Naur ceilometer-2013.1.g3.orig/ceilometer/__init__.py ceilometer-2013.1.g3
 +
 +replace_dist("WebOb >= 1.2")
 +replace_dist("SQLAlchemy >= 0.7.3")
-+
- import gettext
- 
- gettext.install('ceilometer', unicode=1)
-diff -Naur ceilometer-2013.1.g3.orig/ceilometer/storage/sqlalchemy/migration.py ceilometer-2013.1.g3/ceilometer/storage/sqlalchemy/migration.py
---- ceilometer-2013.1.g3.orig/ceilometer/storage/sqlalchemy/migration.py	2013-04-08 09:54:04.608469135 +0000
-+++ ceilometer-2013.1.g3/ceilometer/storage/sqlalchemy/migration.py	2013-04-08 10:06:21.515180041 +0000
-@@ -52,7 +52,13 @@
- 
- 
- # NOTE(jkoelker) Delay importing migrate until we are patched
--from migrate import exceptions as versioning_exceptions
-+try:
-+    # Try the more specific path first (migrate <= 0.6)
-+    from migrate.versioning import exceptions as versioning_exceptions
-+except ImportError:
-+    # Use the newer path (migrate >= 0.7)
-+    from migrate import exceptions as versioning_exceptions
-+
- from migrate.versioning import api as versioning_api
- from migrate.versioning.repository import Repository
- 

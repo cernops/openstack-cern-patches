@@ -1,24 +1,24 @@
 #!/bin/sh
 #
-# openstack-ceilometer-central  OpenStack ceilometer central agent
+# openstack-ceilometer-notification  OpenStack ceilometer notification agent
 #
 # chkconfig:   - 98 02
-# description: OpenStack measurement and collection service central agent
+# description: OpenStack measurement and collection agent notification service
 
 ### BEGIN INIT INFO
 # Provides:
 # Required-Start: $remote_fs $network $syslog
 # Required-Stop: $remote_fs $syslog
 # Default-Stop: 0 1 6
-# Short-Description: OpenStack ceilometer central agent
-# Description: OpenStack measurement and collection service central agent
+# Short-Description: OpenStack ceilometer agent notification service
+# Description: OpenStack measurement collection agent notification service
 ### END INIT INFO
 
 . /etc/rc.d/init.d/functions
 
-suffix=central
+suffix=agent-notification
 prog=openstack-ceilometer-$suffix
-exec="/usr/bin/ceilometer-agent-$suffix"
+exec="/usr/bin/ceilometer-$suffix"
 config="/etc/ceilometer/ceilometer.conf"
 pidfile="/var/run/ceilometer/ceilometer-$suffix.pid"
 logfile="/var/log/ceilometer/$suffix.log"
