@@ -33,6 +33,7 @@ Source160:        %{name}-notification.upstart
 # patches_base=2014.1
 #
 Patch0001: 0001-Ensure-we-don-t-access-the-net-when-building-docs.patch
+Patch0002: 0002-Introduce-separator-parameter-in-hbase.patch
 
 # This is EL6 specific and not upstream
 Patch100:         openstack-ceilometer-newdeps.patch
