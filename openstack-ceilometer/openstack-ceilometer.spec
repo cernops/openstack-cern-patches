@@ -3,8 +3,8 @@
 %global pypi_name ceilometer
 
 Name:             openstack-ceilometer
-Version:          2014.1
-Release:          2%{?dist}
+Version:          2014.1.1
+Release:          3%{?dist}
 Summary:          OpenStack measurement collection service
 
 Group:            Applications/System
@@ -30,9 +30,9 @@ Source16:         %{name}-notification.init
 Source160:        %{name}-notification.upstart
 
 #
-# patches_base=2014.1
+# patches_base=2014.1.1
 #
-Patch0001: 0001-Ensure-we-don-t-access-the-net-when-building-docs.patch
+Patch0001: 0001-Ensure-routing-key-is-specified-in-the-address-for-a.patch
 Patch0002: 0002-Introduce-separator-parameter-in-hbase.patch
 
 # This is EL6 specific and not upstream
@@ -259,6 +259,7 @@ This package contains documentation files for ceilometer.
 %setup -q -n ceilometer-%{version}
 
 %patch0001 -p1
+%patch0002 -p1
 
 # Apply EL6 patch
 %patch100 -p1
@@ -568,6 +569,13 @@ fi
 
 
 %changelog
+* Wed Jun 11 2014 Steve Linabery <slinaber@redhat.com> - 2014.1.1-2
+- Update to upstream 2014.1.1
+- fix message routing with newer QPID (rhbz#1103800)
+
+* Sat Jun 07 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2014.1-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_Mass_Rebuild
+
 * Wed May 07 2014 Pádraig Brady <pbrady@redhat.com> - 2014.1-2
 - Avoid dependency issues with distributed installs (#1095414)
 
