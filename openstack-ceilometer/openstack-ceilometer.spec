@@ -4,7 +4,7 @@
 
 Name:             openstack-ceilometer
 Version:          2014.1.1
-Release:          3%{?dist}
+Release:          4%{?dist}
 Summary:          OpenStack measurement collection service
 
 Group:            Applications/System
@@ -33,7 +33,9 @@ Source160:        %{name}-notification.upstart
 # patches_base=2014.1.1
 #
 Patch0001: 0001-Ensure-routing-key-is-specified-in-the-address-for-a.patch
-Patch0002: 0002-Introduce-separator-parameter-in-hbase.patch
+Patch0002: 0002-remove-token-from-notifier-middleware.patch
+Patch0003: 0003-Introduce-separator-parameter-in-hbase.patch
+Patch0004: 0004-Patches-to-allow-icehouse-ceilometer-to-run-with-hav.patch
 
 # This is EL6 specific and not upstream
 Patch100:         openstack-ceilometer-newdeps.patch
@@ -260,6 +262,8 @@ This package contains documentation files for ceilometer.
 
 %patch0001 -p1
 %patch0002 -p1
+%patch0003 -p1
+%patch0004 -p1
 
 # Apply EL6 patch
 %patch100 -p1
