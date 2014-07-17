@@ -1,0 +1,69 @@
+From 10a3edb7800d380ed72fcbbaae98251998c0e2c7 Mon Sep 17 00:00:00 2001
+From: Nathan Kinder <nkinder@redhat.com>
+Date: Sat, 28 Jun 2014 08:05:42 -0700
+Subject: [PATCH] Implicitly ignore attributes that are mapped to None in LDAP
+
+Attributes that are mapped to None in LDAP trigger a 500 error when
+performing a search if they are not explicitly ignored in keystone's
+configuration.  These attributes should always be ignored, even if
+the admin left the attribute out of the ignore list.
+
+Change-Id: Ibbabdd0013059d5720250816764021a0b3ce8ce0
+Closes-bug: #1335437
+---
+ keystone/common/ldap/core.py        |    7 ++++++-
+ keystone/tests/test_backend_ldap.py |   19 +++++++++++++++++++
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/keystone/common/ldap/core.py b/keystone/common/ldap/core.py
+index fbf6100..6cbee93 100644
+--- a/keystone/common/ldap/core.py
++++ b/keystone/common/ldap/core.py
+@@ -397,7 +397,12 @@ class BaseLdap(object):
+                 continue
+ 
+             try:
+-                v = lower_res[self.attribute_mapping.get(k, k).lower()]
++                map_attr = self.attribute_mapping.get(k, k)
++                if map_attr is None:
++                    # Ignore attributes that are mapped to None.
++                    continue
++
++                v = lower_res[map_attr.lower()]
+             except KeyError:
+                 pass
+             else:
+diff --git a/keystone/tests/test_backend_ldap.py b/keystone/tests/test_backend_ldap.py
+index 3038dde..5dac9d5 100644
+--- a/keystone/tests/test_backend_ldap.py
++++ b/keystone/tests/test_backend_ldap.py
+@@ -530,6 +530,25 @@ class BaseLDAPIdentity(test_backend.IdentityTests):
+         # If this doesn't raise, then the test is successful.
+         self.identity_api.create_user('fake1', user)
+ 
++    def test_unignored_user_none_mapping(self):
++        # Ensure that an attribute that maps to None that is not explicitly
++        # ignored in configuration is implicitly ignored without triggering
++        # an error.
++        conf = self.get_config(CONF.identity.default_domain_id)
++        conf.ldap.user_attribute_ignore = ['enabled', 'email',
++                                           'tenants', 'tenantId']
++        self.reload_backends(CONF.identity.default_domain_id)
++
++        user = {'name': u'fäké1',
++                'password': u'fäképass1',
++                'domain_id': CONF.identity.default_domain_id,
++                }
++
++        user_ref = self.identity_api.create_user(user)
++
++        # If this doesn't raise, then the test is successful.
++        self.identity_api.get_user(user_ref['id'])
++
+     def test_update_user_name(self):
+         """A user's name cannot be changed through the LDAP driver."""
+         self.assertRaises(exception.Conflict,
+-- 
+1.7.9.5
+
+

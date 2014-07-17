@@ -1,0 +1,215 @@
+From 8a3d786e4f19f8b3a9b60b3cc732075b987eb8cf Mon Sep 17 00:00:00 2001
+From: Jose Castro Leon <jose.castro.leon@cern.ch>
+Date: Tue, 8 Apr 2014 13:45:52 +0200
+Subject: [PATCH] Initial kerberos plugin implementation.
+
+This patch will allow to use kerberos credentials to retrieve
+a token during a post on /v3/auth/tokens. It will force the negotiate
+communication with the client if the method specified is kerberos
+and leaves unaffected the other plugins.
+
+bp: kerberos-authentication
+
+Change-Id: I2fad67c3613c273187f6ca32985d360352c81bf8
+---
+ etc/keystone.conf.sample             |   13 ++
+ keystone/auth/plugins/kerberos.py    |  105 +++++++++++++++
+ keystone/common/config.py            |    6 +
+ keystone/common/wsgi.py              |    3 +-
+ keystone/exception.py                |   12 ++
+ keystone/tests/core.py               |    3 +-
+ keystone/tests/test_kerberos_auth.py |  240 ++++++++++++++++++++++++++++++++++
+ requirements.txt                     |    1 +
+ 8 files changed, 381 insertions(+), 2 deletions(-)
+ create mode 100644 keystone/auth/plugins/kerberos.py
+ create mode 100644 keystone/tests/test_kerberos_auth.py
+
+diff --git a/etc/keystone.conf.sample b/etc/keystone.conf.sample
+index 2bfd21e..88d7619 100644
+--- a/etc/keystone.conf.sample
++++ b/etc/keystone.conf.sample
+@@ -491,6 +491,18 @@
+ # assignment collection. (integer value)
+ #list_limit=<None>
+
++[kerberos]
++
++#
++# Options defined in keystone
++#
++
++# Name of the service in the keytab file. (string value)
++#service_name=keystone.example.com
++
++# Location of the keytab file for the service. (string value)
++#keytab_file=/etc/keystone/keystone.keytab
++
+
+ [auth]
+
+diff --git a/keystone/auth/plugins/kerberos.py b/keystone/auth/plugins/kerberos.py
+new file mode 100644
+index 0000000..1b2c8bc
+--- /dev/null
++++ b/keystone/auth/plugins/kerberos.py
+@@ -0,0 +1,105 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++from __future__ import absolute_import
++import os
++
++import kerberos
++
++from keystone import auth
++from keystone.common import dependency
++from keystone import config
++from keystone import exception
++from keystone.openstack.common.gettextutils import _
++from keystone.openstack.common import log
++
++CONF = config.CONF
++METHOD_NAME = 'kerberos'
++os.environ['KRB5_KTNAME'] = CONF.kerberos.keytab_file
++
++LOG = log.getLogger(__name__)
++
++
++@dependency.requires('assignment_api', 'identity_api')
++class Kerberos(auth.AuthMethodHandler):
++
++    method = METHOD_NAME
++
++    def __init__(self):
++        servicename = CONF.kerberos.service_name
++        self.service = 'HTTP@%s' % servicename
++        try:
++            principal = kerberos.getServerPrincipalDetails('HTTP', servicename)
++        except kerberos.KrbError as ex:
++            LOG.warn(_('Error while initializing kerberos library: %s'), ex)
++        else:
++            LOG.info(_('Service identified as Kerberos/%s'), principal)
++
++    def kerberos_step(self, client_token):
++        """Validates the client kerberos ticket within the system
++        If it requires an extra validation it will send an extra
++        authentication token. If the authentication succeeds it will
++        return the user in the format (user@REALM) received.
++        """
++        state = None
++        server_token = None
++        user = None
++        try:
++            rc, state = kerberos.authGSSServerInit(self.service)
++            if rc == kerberos.AUTH_GSS_COMPLETE:
++                rc, state = kerberos.authGSSServerStep(state, client_token)
++                if rc == kerberos.AUTH_GSS_COMPLETE:
++                    server_token = kerberos.authGSSServerResponse(state)
++                    user = kerberos.authGSSServerUserName(state)
++                elif rc == kerberos.AUTH_GSS_CONTINUE:
++                    server_token = kerberos.authGSSServerResponse(state)
++        except kerberos.GSSError as ex:
++            LOG.error(_('Error during kerberos step: %s'), ex)
++        finally:
++            if state:
++                kerberos.authGSSServerClean(state)
++        return server_token, user
++
++    def authenticate(self, context, auth_payload, user_context):
++        """Authenticates the user if it presents a kerberos token
++        If not it will resend the negotiate header. The client
++        user is in the format (user@REALM) and it will be verified
++        within the identity API.
++        """
++        auth_header = None
++        if context['headers'] and 'Authorization' in context['headers']:
++            auth_header = context['headers'].get('Authorization')
++
++        if auth_header is None:
++            raise exception.KerberosUnauthorized()
++        client_token = ''.join(auth_header.split()[1:])
++        server_token, user = self.kerberos_step(client_token)
++
++        if user:
++            names = user.rsplit('@', 1)
++            username = names.pop(0)
++            if names:
++                domain_name = names[0]
++                domain_ref = (self.assignment_api.
++                              get_domain_by_name(domain_name))
++                domain_id = domain_ref['id']
++            else:
++                domain_id = CONF.identity.default_domain_id
++            user_ref = self.identity_api.get_user_by_name(username,
++                                                          domain_id)
++            if 'user_id' not in user_context:
++                user_context['user_id'] = user_ref['id']
++        elif server_token:
++            raise exception.KerberosUnauthorized(token=server_token)
++        else:
++            raise exception.Forbidden(_("Error while checking the "
++                                        "client kerberos credentials"))
+diff --git a/keystone/common/config.py b/keystone/common/config.py
+index e936973..68c9ecc 100644
+--- a/keystone/common/config.py
++++ b/keystone/common/config.py
+@@ -599,6 +599,11 @@
+         cfg.StrOpt('tls_req_cert', default='demand',
+                    help='valid options for tls_req_cert are demand, never, '
+                         'and allow.')],
++    'kerberos': [
++        cfg.StrOpt('service_name', default='keystone.example.com',
++                   help='Name of the service in the keytab file.'),
++        cfg.StrOpt('keytab_file', default='/etc/keystone/keystone.keytab',
++                   help='Location of the keytab file for the service.')],
+     'auth': [
+         cfg.ListOpt('methods', default=_DEFAULT_AUTH_METHODS,
+                     help='Default auth methods.'),
+diff --git a/keystone/common/wsgi.py b/keystone/common/wsgi.py
+index f8f96a7..b6a9e7d 100644
+--- a/keystone/common/wsgi.py
++++ b/keystone/common/wsgi.py
+@@ -625,7 +625,8 @@ def render_exception(error, context=None, request=None, user_locale=None):
+         else:
+             url = url % CONF
+
+-        headers.append(('WWW-Authenticate', 'Keystone uri="%s"' % url))
++        if error.www_authenticate:
++            headers.append(('WWW-Authenticate', error.www_authtenticate))
+     return render_response(status=(error.code, error.title),
+                            body=body,
+                            headers=headers)
+diff --git a/keystone/exception.py b/keystone/exception.py
+index 604873d..bd76ec5 100644
+--- a/keystone/exception.py
++++ b/keystone/exception.py
+@@ -132,6 +132,18 @@ class Unauthorized(SecurityError):
+     message_format = _("The request you have made requires authentication.")
+     code = 401
+     title = 'Unauthorized'
++    www_authenticate = None
++
++    def __init__(self, **kwargs):
++        super(SecurityError, self).__init__(**kwargs)
++        self.www_authenticate = 'Keystone uri="%s"' % (
++            CONF.public_endpoint % CONF)
++
++
++class KerberosUnauthorized(Unauthorized):
++    def __init__(self, token=None, **kwargs):
++        super(Unauthorized, self).__init__(**kwargs)
++        self.www_authenticate = token if token else 'Negotiate'
+
+
+ class AuthPluginException(Unauthorized):
+-- 
+1.7.1

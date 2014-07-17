@@ -1,0 +1,164 @@
+diff --git a/keystone/identity/backends/ldap.py b/keystone/identity/backends/ldap.py
+index d23f18e..3d0e8e7 100644
+--- a/keystone/identity/backends/ldap.py
++++ b/keystone/identity/backends/ldap.py
+@@ -13,6 +13,7 @@
+ # under the License.
+ from __future__ import absolute_import
+ import uuid
++import struct
+
+ import ldap
+ import ldap.filter
+@@ -326,15 +326,37 @@ class GroupApi(common_ldap.BaseLdap):
+         finally:
+             conn.unbind_s()
+
++    def _sid2str(self, sid):
++        srl = ord(sid[0])
++        number_sub_id = ord(sid[1])
++        iav = struct.unpack('!Q','\x00\x00'+sid[2:8])[0]
++        sub_ids = [struct.unpack('<I',sid[8+4*i:12+4*i])[0]
++                   for i in range(number_sub_id)]
++        return 'S-%d-%d-%s' % (srl,
++                               iav,
++                               '-'.join([str(s) for s in sub_ids]),)
++
+     def list_user_groups(self, user_dn):
+         """Return a list of groups for which the user is a member."""
++        memberships = []
++        sids = []
++        try:
++            conn = self.get_connection()
++            sids = conn.search_s(user_dn,
++                                 ldap.SCOPE_BASE,
++                                 '(objectClass=Person)',
++                                 ['tokenGroups'])[0][1]['tokenGroups']
++        except ldap.NO_SUCH_OBJECT:
++            pass
++        finally:
++            conn.unbind_s()
+
+-        user_dn_esc = ldap.filter.escape_filter_chars(user_dn)
+-        query = '(&(objectClass=%s)(%s=%s)%s)' % (self.object_class,
+-                                                  self.member_attribute,
+-                                                  user_dn_esc,
+-                                                  self.ldap_filter or '')
+-        memberships = self.get_all(query)
++        groups_query = ''.join(['(objectSID=%s)' % self._sid2str(sid) for sid in sids])
++        query = '(&(objectClass=%s)(|%s)%s)' % (self.object_class,
++                                                groups_query,
++                                                self.ldap_filter or '')
++        for m in self.get_all(query):
++            memberships.append(m)
+         return memberships
+
+     def list_group_users(self, group_id):
+diff --git a/keystone/assignment/backends/ldap.py b/keystone/assignment/backends/ldap.py
+index d23f18e..3d0e8e7 100644
+--- a/keystone/assignment/backends/ldap.py
++++ b/keystone/assignment/backends/ldap.py
+@@ -133,6 +133,13 @@
+         user_dn = self.user._id_to_dn(user_id)
+         associations = (self.role.list_project_roles_for_user
+                         (user_dn, self.project.tree_dn))
++
++        for group_id in group_ids:
++            group_dn = self.group._id_to_dn(group_id)
++            for a in (self.role.list_project_roles_for_group
++                      (group_dn, self.project.tree_dn)):
++                associations.append(a)
++
+         # Since the LDAP backend doesn't store the domain_id in the LDAP
+         # records (and only supports the default domain), we fill in the
+         # domain_id before we return the list.
+@@ -397,10 +397,17 @@
+
+     def list_role_assignments(self):
+         role_assignments = []
+-        for a in self.role.list_role_assignments(self.project.tree_dn):
+-            assignment = {'role_id': self.role._dn_to_id(a.role_dn),
+-                          'user_id': self.user._dn_to_id(a.user_dn),
+-                          'project_id': self.project._dn_to_id(a.project_dn)}
++        for a in self.role.list_role_assignments(self.project.tree_dn,
++                                                 self.user.tree_dn,
++                                                 self.group.tree_dn):
++            if isinstance(a, UserRoleAssociation):
++                assignment = {'role_id': self.role._dn_to_id(a.role_dn),
++                              'user_id': self.user._dn_to_id(a.user_dn),
++                              'project_id': self.project._dn_to_id(a.project_dn)}
++            else:
++                assignment = {'role_id': self.role._dn_to_id(a.role_dn),
++                              'group_id': self.group._dn_to_id(a.group_dn),
++                              'project_id': self.project._dn_to_id(a.project_dn)}
+             role_assignments.append(assignment)
+         return role_assignments
+
+@@ -641,6 +648,35 @@
+                 tenant_dn=tenant_dn))
+         return res
+ 
++    def list_project_roles_for_group(self, group_dn, project_subtree):
++        conn = self.get_connection()
++        query = '(&(objectClass=%s)(%s=%s))' % (self.object_class,
++                                                self.member_attribute,
++                                                group_dn)
++        try:
++            roles = conn.search_s(project_subtree,
++                                  ldap.SCOPE_SUBTREE,
++                                  query)
++        except ldap.NO_SUCH_OBJECT:
++            return []
++        finally:
++            conn.unbind_s()
++
++        res = []
++        for role_dn, _ in roles:
++            #ldap.dn.dn2str returns an array, where the first
++            #element is the first segment.
++            #For a role assignment, this contains the role ID,
++            #The remainder is the DN of the tenant.
++            tenant = ldap.dn.str2dn(role_dn)
++            tenant.pop(0)
++            tenant_dn = ldap.dn.dn2str(tenant)
++            res.append(GroupRoleAssociation(
++                group_dn=group_dn,
++                role_dn=role_dn,
++                tenant_dn=tenant_dn))
++        return res
++
+     def roles_delete_subtree_by_project(self, tenant_dn):
+         conn = self.get_connection()
+         query = '(objectClass=%s)' % self.object_class
+@@ -679,7 +686,10 @@
+             conn.unbind_s()
+         super(RoleApi, self).delete(role_id)
+
+-    def list_role_assignments(self, project_tree_dn):
++    def list_role_assignments(self,
++                              project_tree_dn,
++                              user_tree_dn,
++                              group_tree_dn):
+         """Returns a list of all the role assignments linked to project_tree_dn
+         attribute.
+         """
+@@ -712,8 +712,14 @@
+                 if (self.use_dumb_member and
+                         user_dn.lower() == self.dumb_member.lower()):
+                     continue
+-                res.append(UserRoleAssociation(
+-                           user_dn=user_dn,
+-                           role_dn=role_dn,
+-                           tenant_dn=tenant_dn))
++                if user_tree_dn in user_dn:
++                    res.append(UserRoleAssociation(
++                               user_dn=user_dn,
++                               role_dn=role_dn,
++                               tenant_dn=tenant_dn))
++                if group_tree_dn in user_dn:
++                    res.append(GroupRoleAssociation(
++                               group_dn=user_dn,
++                               role_dn=role_dn,
++                               tenant_dn=tenant_dn))
+         return res
+

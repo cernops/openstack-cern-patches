@@ -1,0 +1,16 @@
+diff --git a/httpd/keystone.py b/httpd/keystone.py
+index d23f18e..3d0e8e7 100644
+--- a/httpd/keystone.py       2014-05-21 08:02:19.193522150 +0200
++++ b/httpd/keystone.py       2014-05-21 07:37:07.870560881 +0200
+@@ -15,9 +15,9 @@
+ import logging
+ import os
+
+-from paste import deploy
+-
+ from keystone.openstack.common import gettextutils
++
++from paste import deploy
+ # NOTE(dstanek): gettextutils.enable_lazy() must be called before
+ # gettextutils._() is called to ensure it has the desired lazy lookup
+ # behavior. This includes cases, like keystone.exceptions, where
