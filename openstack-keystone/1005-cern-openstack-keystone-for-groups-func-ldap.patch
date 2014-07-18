@@ -1,0 +1,60 @@
+From ea60521372882e1ff148a15b4f0075ef70e41765 Mon Sep 17 00:00:00 2001
+From: Marcos Fermin Lobo <marcos.fermin.lobo@cern.ch>
+Date: Tue, 24 Jun 2014 16:07:07 +0200
+Subject: [PATCH] NotImplemented _for_groups functions on LDAP
+
+These functions are not implemented on assignment LDAP backend:
+
+- get_roles_for_groups
+- list_projects_for_groups
+- list_domains_for_groups
+
+Change-Id: I0020a1a78004cfca1bcec40ecc938d3e2362dba8
+Closes-Bug: #1333712
+---
+ keystone/assignment/backends/ldap.py |   25 ++++++++++++--
+ keystone/tests/test_backend_ldap.py  |   60 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 82 insertions(+), 3 deletions(-)
+
+diff --git a/keystone/assignment/backends/ldap.py b/keystone/assignment/backends/ldap.py
+index 744441c..62257b4 100644
+--- a/keystone/assignment/backends/ldap.py
++++ b/keystone/assignment/backends/ldap.py
+@@ -145,13 +145,32 @@ class Assignment(assignment.Driver):
+                 self.project.get_user_projects(user_dn, associations)]
+ 
+     def get_roles_for_groups(self, group_ids, project_id=None, domain_id=None):
+-        raise exception.NotImplemented()
++        associations = []
++        project_subtree_dn = self.project.tree_dn
++        if project_id is not None:
++            project_subtree_dn = self.project._id_to_dn(project_id)
++        for group_id in group_ids:
++            group_dn = self.group._id_to_dn(group_id)
++            for g in self.role.list_project_roles_for_group(
++                    group_dn, project_subtree_dn):
++                associations.append(self.role._dn_to_id(g.role_dn))
++
++        return [self.get_role(r) for r in associations]
+ 
+     def list_projects_for_groups(self, group_ids):
+-        raise exception.NotImplemented()
++        project_ids = []
++        for group_id in group_ids:
++            group_dn = self.group._id_to_dn(group_id)
++            for group_role in self.role.list_project_roles_for_group(
++                    group_dn, self.project.tree_dn):
++                project_ids.append(self.project._dn_to_id(
++                                   group_role.project_dn))
++
++        return [self._set_default_domain(self.get_project(project_id))
++                for project_id in project_ids]
+ 
+     def list_domains_for_groups(self, group_ids):
+-        raise exception.NotImplemented()
++        return [assignment.calc_default_domain()]
+ 
+     def list_user_ids_for_project(self, tenant_id):
+         self.get_project(tenant_id)
+-- 
+1.7.9.5
