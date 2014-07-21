@@ -20,7 +20,7 @@ diff --git a/keystone/assignment/backends/ldap.py b/keystone/assignment/backends
 index 744441c..62257b4 100644
 --- a/keystone/assignment/backends/ldap.py
 +++ b/keystone/assignment/backends/ldap.py
-@@ -145,13 +145,32 @@ class Assignment(assignment.Driver):
+@@ -147,13 +147,32 @@ class Assignment(assignment.Driver):
                  self.project.get_user_projects(user_dn, associations)]
  
      def get_roles_for_groups(self, group_ids, project_id=None, domain_id=None):

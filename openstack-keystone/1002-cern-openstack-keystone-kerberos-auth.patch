@@ -184,7 +184,7 @@ index f8f96a7..b6a9e7d 100644
 
 -        headers.append(('WWW-Authenticate', 'Keystone uri="%s"' % url))
 +        if error.www_authenticate:
-+            headers.append(('WWW-Authenticate', error.www_authtenticate))
++            headers.append(('WWW-Authenticate', error.www_authenticate))
      return render_response(status=(error.code, error.title),
                             body=body,
                             headers=headers)
@@ -198,8 +198,8 @@ index 604873d..bd76ec5 100644
      title = 'Unauthorized'
 +    www_authenticate = None
 +
-+    def __init__(self, **kwargs):
-+        super(SecurityError, self).__init__(**kwargs)
++    def __init__(self, *args, **kwargs):
++        super(SecurityError, self).__init__(*args, **kwargs)
 +        self.www_authenticate = 'Keystone uri="%s"' % (
 +            CONF.public_endpoint % CONF)
 +

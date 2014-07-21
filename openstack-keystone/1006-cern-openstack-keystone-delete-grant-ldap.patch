@@ -2,7 +2,7 @@ diff --git a/keystone/assignment/backends/ldap.py b/keystone/assignment/backends
 index 744441c..9159c15 100644
 --- a/keystone/assignment/backends/ldap.py
 +++ b/keystone/assignment/backends/ldap.py
-@@ -342,6 +342,11 @@ class Assignment(assignment.Driver):
+@@ -373,6 +373,11 @@ class Assignment(assignment.Driver):
      def delete_grant(self, role_id, user_id=None, group_id=None,
                       domain_id=None, project_id=None,
                       inherited_to_projects=False):
