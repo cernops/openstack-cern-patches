@@ -1,0 +1,46 @@
+From cede1fd7e61d36c742752b702c3199c6a355e981 Mon Sep 17 00:00:00 2001
+From: Stefano Zilli <stefano.zilli@cern.ch>
+Date: Wed, 18 Jun 2014 11:08:08 +0200
+Subject: [PATCH] Parametrize table_prefix_separator in hbase
+
+table_prefix_separator is hardcoded to be an underscore (happybase
+default). This fix adds the possibility to parametrize this value using
+a parameter in ceilometer database configuration. An example is:
+hbase://localhost:9090/?table_prefix=ceilo&table_prefix_separator=.
+
+Change-Id: I761977dadce102641f91930ebf75db8177d03a6b
+Closes-Bug: #1331374
+---
+ ceilometer/storage/impl_hbase.py |   11 ++++++++---
+ ceilometer/tests/db.py           |    6 ++++--
+ 2 files changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/ceilometer/storage/impl_hbase.py b/ceilometer/storage/impl_hbase.py
+index 84ff50a..9b2a10b 100644
+--- a/ceilometer/storage/impl_hbase.py
++++ b/ceilometer/storage/impl_hbase.py
+@@ -218,9 +218,12 @@ class Connection(base.Connection):
+         """
+         LOG.debug(_('connecting to HBase on %(host)s:%(port)s') % (
+                   {'host': conf['host'], 'port': conf['port']}))
+-        return happybase.ConnectionPool(size=100, host=conf['host'],
+-                                        port=conf['port'],
+-                                        table_prefix=conf['table_prefix'])
++        return happybase.ConnectionPool(
++            size=100,
++            host=conf['host'],
++            port=conf['port'],
++            table_prefix=conf['table_prefix'],
++            table_prefix_separator=conf['table_prefix_separator'])
+
+     @staticmethod
+     def _parse_connection_url(url):
+@@ -235,6 +238,8 @@ class Connection(base.Connection):
+         result = network_utils.urlsplit(url)
+         opts['table_prefix'] = urlparse.parse_qs(
+             result.query).get('table_prefix', [None])[0]
++        opts['table_prefix_separator'] = urlparse.parse_qs(
++            result.query).get('table_prefix_separator', ['_'])[0]
+         opts['dbtype'] = result.scheme
+         if ':' in result.netloc:
+             opts['host'], port = result.netloc.split(':')
